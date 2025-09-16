@@ -30,35 +30,55 @@ export class ApiService {
 
   async testConnection(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.config.baseUrl}/health`, {
+      const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.items}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
         },
-        signal: AbortSignal.timeout(5000), // 5 second timeout
+        mode: "cors",
+        signal: AbortSignal.timeout(5000),
       })
 
       const isConnected = response.ok
       this.config.isConnected = isConnected
+
+      if (isConnected) {
+        console.log("[v0] API connection successful")
+      } else {
+        console.log("[v0] API connection failed - response not ok:", response.status, response.statusText)
+      }
+
       return isConnected
     } catch (error) {
       console.error("[v0] API connection test failed:", error)
+
+      if (error instanceof TypeError && error.message.includes("Failed to fetch")) {
+        console.error("[v0] This is likely a CORS issue or the API server is not running")
+      }
+
       this.config.isConnected = false
       return false
     }
   }
 
   async fetchItems(): Promise<any[]> {
-    if (!this.config.isConnected) {
-      throw new Error("API not connected")
-    }
-
     try {
-      const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.items}`)
+      const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.items}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        mode: "cors",
+        signal: AbortSignal.timeout(10000),
+      })
+
       if (!response.ok) {
         throw new Error(`Failed to fetch items: ${response.statusText}`)
       }
-      return await response.json()
+
+      const data = await response.json()
+      console.log("[v0] Successfully fetched items from API:", data.length, "items")
+      return data
     } catch (error) {
       console.error("[v0] Failed to fetch items:", error)
       throw error
@@ -66,16 +86,23 @@ export class ApiService {
   }
 
   async fetchEmployees(): Promise<any[]> {
-    if (!this.config.isConnected) {
-      throw new Error("API not connected")
-    }
-
     try {
-      const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.employees}`)
+      const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.employees}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        mode: "cors",
+        signal: AbortSignal.timeout(10000),
+      })
+
       if (!response.ok) {
         throw new Error(`Failed to fetch employees: ${response.statusText}`)
       }
-      return await response.json()
+
+      const data = await response.json()
+      console.log("[v0] Successfully fetched employees from API:", data.length, "employees")
+      return data
     } catch (error) {
       console.error("[v0] Failed to fetch employees:", error)
       throw error
@@ -83,23 +110,22 @@ export class ApiService {
   }
 
   async commitItemChanges(items: any[]): Promise<boolean> {
-    if (!this.config.isConnected) {
-      throw new Error("API not connected")
-    }
-
     try {
       const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.items}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
+        mode: "cors",
         body: JSON.stringify(items),
+        signal: AbortSignal.timeout(10000),
       })
 
       if (!response.ok) {
         throw new Error(`Failed to commit changes: ${response.statusText}`)
       }
 
+      console.log("[v0] Successfully committed item changes to API")
       return true
     } catch (error) {
       console.error("[v0] Failed to commit item changes:", error)

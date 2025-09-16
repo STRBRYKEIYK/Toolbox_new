@@ -36,6 +36,8 @@ export default function HomePage() {
   const [isAppStarted, setIsAppStarted] = useState(false)
   const [apiUrl, setApiUrl] = useState(DEFAULT_API_CONFIG.baseUrl)
   const [isApiConnected, setIsApiConnected] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
+  const [isTestingConnection, setIsTestingConnection] = useState(false)
 
   const [currentView, setCurrentView] = useState<ViewType>("dashboard")
   const [cartItems, setCartItems] = useState<CartItem[]>([])
@@ -44,8 +46,22 @@ export default function HomePage() {
 
   useEffect(() => {
     const testConnection = async () => {
-      const connected = await apiService.testConnection()
-      setIsApiConnected(connected)
+      setIsTestingConnection(true)
+      setApiError(null)
+
+      try {
+        const connected = await apiService.testConnection()
+        setIsApiConnected(connected)
+
+        if (!connected) {
+          setApiError("Unable to connect to API server. Please check if the server is running and accessible.")
+        }
+      } catch (error) {
+        setIsApiConnected(false)
+        setApiError("Connection failed. This might be due to CORS issues or network problems.")
+      } finally {
+        setIsTestingConnection(false)
+      }
     }
 
     if (apiUrl) {
@@ -60,9 +76,7 @@ export default function HomePage() {
   }
 
   const handleStartApp = () => {
-    if (isApiConnected) {
-      setIsAppStarted(true)
-    }
+    setIsAppStarted(true)
   }
 
   const addToCart = (product: Product, quantity = 1) => {
@@ -103,12 +117,14 @@ export default function HomePage() {
         apiUrl={apiUrl}
         onApiUrlChange={handleApiUrlChange}
         isConnected={isApiConnected}
+        apiError={apiError}
+        isTestingConnection={isTestingConnection}
       />
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-background">
       <Header
         cartItemCount={totalCartItems}
         currentView={currentView}
@@ -122,7 +138,12 @@ export default function HomePage() {
         )}
 
         {currentView === "cart" && (
-          <CartView items={cartItems} onUpdateQuantity={updateCartItemQuantity} onRemoveItem={removeFromCart} />
+          <CartView
+            items={cartItems}
+            onUpdateQuantity={updateCartItemQuantity}
+            onRemoveItem={removeFromCart}
+            onReturnToBrowsing={() => setCurrentView("dashboard")} // Added callback to return to dashboard
+          />
         )}
 
         {currentView === "item-detail" && selectedProduct && (

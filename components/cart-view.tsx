@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { CheckoutModal } from "./checkout-modal"
+import { CheckoutSuccessCountdown } from "./checkout-success-countdown"
 import { apiService } from "@/lib/api-config"
 import { useToast } from "@/hooks/use-toast"
 import type { CartItem } from "@/app/page"
@@ -16,13 +17,16 @@ interface CartViewProps {
   items: CartItem[]
   onUpdateQuantity: (id: string, quantity: number) => void
   onRemoveItem: (id: string) => void
+  onReturnToBrowsing?: () => void // Added callback to return to dashboard
 }
 
-export function CartView({ items, onUpdateQuantity, onRemoveItem }: CartViewProps) {
+export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrowsing }: CartViewProps) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [sortBy, setSortBy] = useState("name-asc")
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
   const [isCommitting, setIsCommitting] = useState(false)
+  const [showSuccessCountdown, setShowSuccessCountdown] = useState(false) // Added success countdown state
+  const [checkoutData, setCheckoutData] = useState<{ userId: string; totalItems: number } | null>(null) // Store checkout data for countdown
   const { toast } = useToast()
 
   const sortedItems = [...items].sort((a, b) => {
@@ -146,7 +150,8 @@ export function CartView({ items, onUpdateQuantity, onRemoveItem }: CartViewProp
 
       setIsCheckoutOpen(false)
 
-      items.forEach((item) => onRemoveItem(item.id))
+      setCheckoutData({ userId, totalItems })
+      setShowSuccessCountdown(true)
     } catch (error) {
       console.error("[v0] Checkout process failed:", error)
 
@@ -157,6 +162,19 @@ export function CartView({ items, onUpdateQuantity, onRemoveItem }: CartViewProp
       })
     } finally {
       setIsCommitting(false)
+    }
+  }
+
+  const handleCountdownComplete = () => {
+    setShowSuccessCountdown(false)
+    setCheckoutData(null)
+
+    // Clear cart items
+    items.forEach((item) => onRemoveItem(item.id))
+
+    // Return to browsing/dashboard view
+    if (onReturnToBrowsing) {
+      onReturnToBrowsing()
     }
   }
 
@@ -331,6 +349,14 @@ export function CartView({ items, onUpdateQuantity, onRemoveItem }: CartViewProp
         items={items}
         onConfirmCheckout={handleConfirmCheckout}
         isCommitting={isCommitting}
+      />
+
+      <CheckoutSuccessCountdown
+        isOpen={showSuccessCountdown}
+        onComplete={handleCountdownComplete}
+        userId={checkoutData?.userId || ""}
+        totalItems={checkoutData?.totalItems || 0}
+        countdownSeconds={5}
       />
     </div>
   )
