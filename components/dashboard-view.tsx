@@ -72,9 +72,10 @@ interface DashboardViewProps {
   onAddToCart: (product: Product, quantity?: number) => void
   onViewItem: (product: Product) => void
   searchQuery?: string
+  onRefreshData?: (refreshFunction: () => void) => void // Callback to expose refresh function
 }
 
-export function DashboardView({ onAddToCart, onViewItem, searchQuery = "" }: DashboardViewProps) {
+export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRefreshData }: DashboardViewProps) {
   const [products, setProducts] = useState<Product[]>([])
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [dataSource, setDataSource] = useState<"api" | "mock">("mock")
@@ -160,6 +161,13 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "" }: Das
   useEffect(() => {
     fetchProductsFromAPI()
   }, [])
+
+  // Expose refresh function to parent component
+  useEffect(() => {
+    if (onRefreshData) {
+      onRefreshData(handleRefreshData)
+    }
+  }, [onRefreshData])
 
   // Update local search when header search changes
   useEffect(() => {

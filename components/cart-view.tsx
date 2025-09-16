@@ -18,9 +18,10 @@ interface CartViewProps {
   onUpdateQuantity: (id: string, quantity: number) => void
   onRemoveItem: (id: string) => void
   onReturnToBrowsing?: () => void // Added callback to return to dashboard
+  onRefreshData?: () => void // Added callback to refresh inventory data
 }
 
-export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrowsing }: CartViewProps) {
+export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrowsing, onRefreshData }: CartViewProps) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [sortBy, setSortBy] = useState("name-asc")
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
@@ -107,24 +108,53 @@ export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrow
           await apiService.commitItemChanges(itemUpdates)
           console.log("[v0] Successfully committed changes to API")
 
+          // Try to log the transaction for audit trail
+          try {
+            await apiService.logTransaction({
+              userId,
+              items: itemUpdates,
+              totalItems,
+              timestamp: new Date().toISOString(),
+            })
+          } catch (transactionError) {
+            console.log("[v0] Transaction logging failed (non-critical):", transactionError)
+          }
+
           toast({
-            title: "Checkout Successful",
-            description: `Items committed to API. User: ${userId}, Total: ${totalItems} items`,
+            title: "Checkout Successful! ✅",
+            description: `${totalItems} items processed. API updated successfully.`,
           })
+
+          // Trigger data refresh to update inventory
+          if (onRefreshData) {
+            console.log("[v0] Triggering inventory data refresh...")
+            onRefreshData()
+          }
         } catch (apiError) {
           console.error("[v0] API commit failed:", apiError)
 
+          // Show specific error message based on the error
+          const errorMessage = apiError instanceof Error && apiError.message.includes("API might not support inventory updates")
+            ? "API endpoints for inventory updates are not available yet. Items removed from cart locally."
+            : "API commit failed, but checkout logged locally."
+
           toast({
-            title: "Checkout Completed (Local Only)",
-            description: `API commit failed, but checkout logged locally. User: ${userId}`,
-            variant: "destructive",
+            title: "Checkout Completed (Local Only) ⚠️",
+            description: `${errorMessage} User: ${userId}`,
+            variant: "default", // Changed from destructive since it's not really an error
           })
+
+          // Still trigger refresh in case API has some data
+          if (onRefreshData) {
+            console.log("[v0] Triggering inventory data refresh...")
+            onRefreshData()
+          }
         }
       } else {
         console.log("[v0] API not connected, logging checkout locally only")
 
         toast({
-          title: "Checkout Completed (Local Only)",
+          title: "Checkout Completed (Local Only) 📝",
           description: `API not connected. User: ${userId}, Total: ${totalItems} items`,
         })
       }

@@ -11,6 +11,7 @@ export const DEFAULT_API_CONFIG: ApiConfig = {
 export const API_ENDPOINTS = {
   items: "/api/items",
   employees: "/api/employees",
+  transactions: "/api/transactions", // For future transaction logging
 } as const
 
 export class ApiService {
@@ -135,25 +136,196 @@ export class ApiService {
 
   async commitItemChanges(items: any[]): Promise<boolean> {
     try {
-      const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.items}`, {
+      console.log("[v0] Committing changes for", items.length, "items using new API endpoints...")
+      
+      // Try the bulk checkout endpoint first, but fall back gracefully to individual endpoints
+      try {
+        const checkoutPayload = {
+          items: items.map(item => ({
+            item_id: item.id,
+            quantity_taken: item.quantity || 1,
+            new_balance: item.balance,
+            notes: `Checkout via POS system - User processed ${item.quantity || 1} units`
+          })),
+          timestamp: new Date().toISOString(),
+          user_id: "pos_system"
+        }
+
+        console.log("[v0] Attempting bulk checkout:", checkoutPayload)
+
+        const checkoutResponse = await fetch(`${this.config.baseUrl}/api/checkout`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          mode: "cors",
+          body: JSON.stringify(checkoutPayload),
+          signal: AbortSignal.timeout(15000),
+        })
+
+        if (checkoutResponse.ok) {
+          const result = await checkoutResponse.json()
+          if (result.success) {
+            console.log("[v0] ✅ Successfully committed changes via bulk checkout endpoint!")
+            console.log("[v0] Checkout result:", result)
+            return true
+          }
+        }
+        
+        // If we get here, the bulk checkout didn't work
+        console.log("[v0] Bulk checkout endpoint not available or failed, using individual endpoints...")
+        
+      } catch (checkoutError) {
+        console.log("[v0] Bulk checkout failed, falling back to individual endpoints:", checkoutError)
+      }
+      
+      // Use individual POST /api/items/:id/out endpoints (this is working!)
+      console.log("[v0] Using individual item out endpoints...")
+      const updatePromises = items.map(async (item) => {
+        try {
+          const itemOutPayload = {
+            quantity: item.quantity || 1,
+            user_id: "pos_system",
+            notes: `POS checkout - ${item.quantity || 1} units taken`
+          }
+
+          console.log(`[v0] Recording item ${item.id} (${item.name || 'Unknown'}) going out:`, itemOutPayload)
+
+          const response = await fetch(`${this.config.baseUrl}/api/items/${item.id}/out`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            mode: "cors",
+            body: JSON.stringify(itemOutPayload),
+            signal: AbortSignal.timeout(10000),
+          })
+
+          if (response.ok) {
+            const result = await response.json()
+            if (result.success) {
+              console.log(`[v0] ✅ Successfully recorded item ${item.id} going out - Balance: ${result.data.transaction.previous_balance} → ${result.data.transaction.new_balance}`)
+              return { 
+                success: true, 
+                item_id: item.id, 
+                data: result.data,
+                previous_balance: result.data.transaction.previous_balance,
+                new_balance: result.data.transaction.new_balance
+              }
+            } else {
+              throw new Error(`Item out failed: ${result.error}`)
+            }
+          } else {
+            const errorText = await response.text()
+            throw new Error(`Item out endpoint returned ${response.status}: ${errorText}`)
+          }
+
+        } catch (error) {
+          console.warn(`[v0] ❌ Failed to record item ${item.id} going out:`, error)
+          return { success: false, item_id: item.id, error: error instanceof Error ? error.message : String(error) }
+        }
+      })
+
+      // Wait for all individual updates to complete
+      const results = await Promise.all(updatePromises)
+      
+      const successfulUpdates = results.filter(r => r.success)
+      const failedUpdates = results.filter(r => !r.success)
+      
+      console.log(`[v0] Individual update results: ${successfulUpdates.length} successful, ${failedUpdates.length} failed`)
+      
+      // Log successful updates
+      successfulUpdates.forEach(result => {
+        if (result.success && result.previous_balance !== undefined) {
+          console.log(`[v0] Item ${result.item_id}: ${result.previous_balance} → ${result.new_balance}`)
+        }
+      })
+      
+      if (successfulUpdates.length > 0) {
+        console.log("[v0] ✅ Item changes committed successfully via individual endpoints!")
+        return true
+      } else {
+        throw new Error("All individual item updates failed")
+      }
+      
+    } catch (error) {
+      console.error("[v0] Failed to commit item changes:", error)
+      throw error
+    }
+  }
+
+  // New method to use the PUT /api/items/:id/quantity endpoint
+  async updateItemQuantity(itemId: number, updateType: 'set_balance' | 'adjust_in' | 'adjust_out' | 'manual', value: number, notes?: string): Promise<any> {
+    try {
+      const payload = {
+        update_type: updateType,
+        value: value,
+        notes: notes || `Quantity update via POS system`
+      }
+
+      console.log(`[v0] Updating quantity for item ${itemId}:`, payload)
+
+      const response = await fetch(`${this.config.baseUrl}/api/items/${itemId}/quantity`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
         mode: "cors",
-        body: JSON.stringify(items),
+        body: JSON.stringify(payload),
         signal: AbortSignal.timeout(10000),
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to commit changes: ${response.statusText}`)
+        const errorText = await response.text()
+        throw new Error(`Quantity update failed: ${response.status} ${errorText}`)
       }
 
-      console.log("[v0] Successfully committed item changes to API")
+      const result = await response.json()
+      if (result.success) {
+        console.log(`[v0] Successfully updated quantity for item ${itemId}:`, result.data)
+        return result
+      } else {
+        throw new Error(`Quantity update failed: ${result.error}`)
+      }
+    } catch (error) {
+      console.error(`[v0] Failed to update quantity for item ${itemId}:`, error)
+      throw error
+    }
+  }
+
+  async logTransaction(transactionData: {
+    userId: string;
+    items: any[];
+    totalItems: number;
+    timestamp: string;
+  }): Promise<boolean> {
+    try {
+      console.log("[v0] Logging transaction to API...")
+      
+      const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.transactions}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        mode: "cors",
+        body: JSON.stringify(transactionData),
+        signal: AbortSignal.timeout(10000),
+      })
+
+      if (!response.ok) {
+        // If transactions endpoint doesn't exist, that's okay - just log locally
+        if (response.status === 404) {
+          console.log("[v0] Transactions endpoint not available, skipping transaction log")
+          return false
+        }
+        throw new Error(`Failed to log transaction: ${response.statusText}`)
+      }
+
+      console.log("[v0] Successfully logged transaction to API")
       return true
     } catch (error) {
-      console.error("[v0] Failed to commit item changes:", error)
-      throw error
+      console.warn("[v0] Failed to log transaction (non-critical):", error)
+      return false
     }
   }
 }

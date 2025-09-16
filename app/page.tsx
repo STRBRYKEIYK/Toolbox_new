@@ -43,6 +43,7 @@ export default function HomePage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [headerSearchQuery, setHeaderSearchQuery] = useState("")
+  const [dashboardRefresh, setDashboardRefresh] = useState<(() => void) | null>(null)
 
   useEffect(() => {
     const testConnection = async () => {
@@ -134,7 +135,12 @@ export default function HomePage() {
 
       <main className="pt-16">
         {currentView === "dashboard" && (
-          <DashboardView onAddToCart={addToCart} onViewItem={viewItemDetail} searchQuery={headerSearchQuery} />
+          <DashboardView 
+            onAddToCart={addToCart} 
+            onViewItem={viewItemDetail} 
+            searchQuery={headerSearchQuery}
+            onRefreshData={setDashboardRefresh}
+          />
         )}
 
         {currentView === "cart" && (
@@ -142,7 +148,8 @@ export default function HomePage() {
             items={cartItems}
             onUpdateQuantity={updateCartItemQuantity}
             onRemoveItem={removeFromCart}
-            onReturnToBrowsing={() => setCurrentView("dashboard")} // Added callback to return to dashboard
+            onReturnToBrowsing={() => setCurrentView("dashboard")}
+            onRefreshData={dashboardRefresh || undefined}
           />
         )}
 
