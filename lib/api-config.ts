@@ -63,22 +63,46 @@ export class ApiService {
 
   async fetchItems(): Promise<any[]> {
     try {
-      const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.items}`, {
+      // Fetch all items with a high limit to get all available items
+      const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.items}?limit=1000`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
         },
         mode: "cors",
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(15000), // Increased timeout for larger responses
       })
 
       if (!response.ok) {
         throw new Error(`Failed to fetch items: ${response.statusText}`)
       }
 
-      const data = await response.json()
-      console.log("[v0] Successfully fetched items from API:", data.length, "items")
-      return data
+      const responseData = await response.json()
+      
+      // Handle the API response structure: {success: true, data: [...]}
+      let items: any[] = []
+      
+      if (responseData && typeof responseData === 'object') {
+        if (responseData.success && Array.isArray(responseData.data)) {
+          items = responseData.data
+          console.log("[v0] Successfully fetched items from API:", items.length, "items")
+          
+          // Log pagination info if available
+          if (responseData.pagination) {
+            console.log("[v0] API pagination info:", responseData.pagination)
+          }
+        } else if (Array.isArray(responseData)) {
+          items = responseData
+          console.log("[v0] Successfully fetched items from API (direct array):", items.length, "items")
+        } else {
+          console.log("[v0] API response structure unexpected:", Object.keys(responseData))
+          throw new Error("API response does not contain expected data structure")
+        }
+      } else {
+        throw new Error("Invalid API response format")
+      }
+      
+      return items
     } catch (error) {
       console.error("[v0] Failed to fetch items:", error)
       throw error

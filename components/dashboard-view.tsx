@@ -99,17 +99,33 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "" }: Das
       console.log("[v0] Attempting to fetch products from API...")
 
       const apiItems = await apiService.fetchItems()
-      console.log("[v0] API items received:", apiItems.length)
+      console.log("[v0] API items received:", apiItems?.length)
+
+      // Check if apiItems is an array before mapping
+      if (!Array.isArray(apiItems)) {
+        throw new Error("API did not return an array of items")
+      }
 
       // Transform API data to match our Product interface
       const transformedProducts: Product[] = apiItems.map((item: any, index: number) => ({
-        id: item.id || (index + 1).toString(),
-        name: item.name || item.title || `Item ${index + 1}`,
+        id: item.item_no?.toString() || item.id?.toString() || (index + 1).toString(),
+        name: item.item_name || item.name || item.title || `Item ${index + 1}`,
         brand: item.brand || item.manufacturer || "Unknown Brand",
-        itemType: item.itemType || item.category || item.type || "General",
+        itemType: item.item_type || item.itemType || item.category || item.type || "General",
         location: item.location || item.warehouse || "Unknown Location",
-        balance: item.balance || item.stock || item.quantity || 0,
-        status: item.balance > 10 ? "in-stock" : item.balance > 0 ? "low-stock" : "out-of-stock",
+        balance: item.balance || item.stock || item.quantity || item.in_qty || 0,
+        status: (() => {
+          const balance = item.balance || item.stock || item.quantity || item.in_qty || 0;
+          if (item.item_status) {
+            // Map API status to our status format
+            const apiStatus = item.item_status.toLowerCase();
+            if (apiStatus.includes('out of stock')) return "out-of-stock";
+            if (apiStatus.includes('low')) return "low-stock";
+            return "in-stock";
+          }
+          // Fallback to balance-based logic
+          return balance > 10 ? "in-stock" : balance > 0 ? "low-stock" : "out-of-stock";
+        })(),
       }))
 
       setProducts(transformedProducts)
@@ -355,13 +371,21 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "" }: Das
           <h3 className="font-medium text-slate-900 dark:text-slate-100">Status</h3>
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <Checkbox id="available" checked={showAvailable} onCheckedChange={setShowAvailable} />
+              <Checkbox 
+                id="available" 
+                checked={showAvailable} 
+                onCheckedChange={(checked) => setShowAvailable(checked === true)} 
+              />
               <label htmlFor="available" className="text-sm dark:text-slate-300">
                 Available
               </label>
             </div>
             <div className="flex items-center space-x-2">
-              <Checkbox id="unavailable" checked={showUnavailable} onCheckedChange={setShowUnavailable} />
+              <Checkbox 
+                id="unavailable" 
+                checked={showUnavailable} 
+                onCheckedChange={(checked) => setShowUnavailable(checked === true)} 
+              />
               <label htmlFor="unavailable" className="text-sm dark:text-slate-300">
                 Unavailable
               </label>
