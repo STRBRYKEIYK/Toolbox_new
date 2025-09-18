@@ -71,7 +71,7 @@ export function ItemDetailView({ product, onAddToCart, onBack }: ItemDetailViewP
         {/* Image Section */}
         <Card>
           <CardContent className="p-8">
-            <div className="aspect-square bg-slate-100 rounded-lg flex items-center justify-center text-slate-500 text-lg">
+            <div className="aspect-square bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500 dark:text-slate-400 text-lg">
               image here
             </div>
           </CardContent>
@@ -80,9 +80,9 @@ export function ItemDetailView({ product, onAddToCart, onBack }: ItemDetailViewP
         {/* Product Information */}
         <div className="space-y-6">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-4">{product.name}</h1>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">{product.name}</h1>
 
-            <div className="space-y-3 text-slate-600">
+            <div className="space-y-3 text-slate-600 dark:text-slate-300">
               <div className="flex justify-between">
                 <span className="font-medium">Brand:</span>
                 <span>{product.brand}</span>
@@ -100,7 +100,7 @@ export function ItemDetailView({ product, onAddToCart, onBack }: ItemDetailViewP
 
               <div className="flex justify-between">
                 <span className="font-medium">Current Balance:</span>
-                <span className="font-bold text-slate-900">{product.balance}</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100">{product.balance}</span>
               </div>
             </div>
           </div>
@@ -117,7 +117,7 @@ export function ItemDetailView({ product, onAddToCart, onBack }: ItemDetailViewP
             <Card>
               <CardContent className="p-4">
                 <div className="space-y-4">
-                  <h3 className="font-medium text-slate-900">Select Quantity</h3>
+                  <h3 className="font-medium text-slate-900 dark:text-slate-100">Select Quantity</h3>
 
                   <div className="flex items-center space-x-4">
                     <Button
@@ -143,7 +143,7 @@ export function ItemDetailView({ product, onAddToCart, onBack }: ItemDetailViewP
                     </Button>
                   </div>
 
-                  <p className="text-sm text-slate-500">Maximum available: {product.balance}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Maximum available: {product.balance}</p>
                 </div>
               </CardContent>
             </Card>
@@ -161,7 +161,7 @@ export function ItemDetailView({ product, onAddToCart, onBack }: ItemDetailViewP
             </Button>
 
             {product.status === "out-of-stock" && (
-              <p className="text-sm text-red-600 text-center">This item is currently out of stock</p>
+              <p className="text-sm text-red-600 dark:text-red-400 text-center">This item is currently out of stock</p>
             )}
           </div>
         </div>
@@ -170,19 +170,19 @@ export function ItemDetailView({ product, onAddToCart, onBack }: ItemDetailViewP
       {/* Additional Information */}
       <Card className="mt-8">
         <CardContent className="p-6">
-          <h3 className="font-medium text-slate-900 mb-4">Item Information</h3>
+          <h3 className="font-medium text-slate-900 dark:text-slate-100 mb-4">Item Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
             <div>
-              <p className="font-medium text-slate-700 mb-1">Status</p>
-              <p className="text-slate-600">{getStatusText(product.status)}</p>
+              <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">Status</p>
+              <p className="text-slate-600 dark:text-slate-400">{getStatusText(product.status)}</p>
             </div>
             <div>
-              <p className="font-medium text-slate-700 mb-1">Available Stock</p>
-              <p className="text-slate-600">{product.balance} units</p>
+              <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">Available Stock</p>
+              <p className="text-slate-600 dark:text-slate-400">{product.balance} units</p>
             </div>
             <div>
-              <p className="font-medium text-slate-700 mb-1">Category</p>
-              <p className="text-slate-600">{product.itemType}</p>
+              <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">Category</p>
+              <p className="text-slate-600 dark:text-slate-400">{product.itemType}</p>
             </div>
           </div>
         </CardContent>
