@@ -1,5 +1,3 @@
-"use client"
-
 import type React from "react"
 import { useState, useMemo, useEffect } from "react"
 import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw } from "lucide-react"
@@ -12,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-config"
 import type { Product } from "@/app/page"
+
 
 const generateMockProducts = (): Product[] => {
   const baseProducts = [
@@ -106,6 +105,8 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
       if (!Array.isArray(apiItems)) {
         throw new Error("API did not return an array of items")
       }
+
+      console.log(apiItems)
 
       // Transform API data to match our Product interface
       const transformedProducts: Product[] = apiItems.map((item: any, index: number) => ({

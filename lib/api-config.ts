@@ -4,15 +4,58 @@ export interface ApiConfig {
 }
 
 export const DEFAULT_API_CONFIG: ApiConfig = {
-  baseUrl: "http://192.168.68.106:3001",
+  baseUrl: "http://192.168.68.140:3001",
   isConnected: false,
 }
 
 export const API_ENDPOINTS = {
   items: "/api/items",
   employees: "/api/employees",
-  transactions: "/api/transactions", // For future transaction logging
+  checkout: "/api/items/checkout",
+  transactions: "/api/employeelogs",
 } as const
+
+// Interface for transaction filters
+export interface TransactionFilters {
+  username?: string
+  date_from?: string
+  date_to?: string
+  search?: string
+  limit?: number
+  offset?: number
+}
+
+// Interface for transaction response
+export interface TransactionResponse {
+  data: any[]
+  total: number
+  limit: number
+  offset: number
+  filters: {
+    username?: string
+    date_from?: string
+    date_to?: string
+    search?: string
+  }
+}
+
+// Interface for transaction stats
+export interface TransactionStats {
+  period_days: number
+  total_logs: number
+  recent_logs: number
+  active_users: number
+  logs_by_day: Array<{
+    log_date: string
+    log_count: number
+    unique_users: number
+  }>
+  top_users: Array<{
+    username: string
+    log_count: number
+    last_activity: string
+  }>
+}
 
 export class ApiService {
   private config: ApiConfig
@@ -75,7 +118,7 @@ export class ApiService {
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch items: ${response.statusText}`)
+        throw new Error(`Failed to fetch items: ${response.status} ${response.statusText}`)
       }
 
       const responseData = await response.json()
@@ -110,9 +153,104 @@ export class ApiService {
     }
   }
 
-  async fetchEmployees(): Promise<any[]> {
+ async fetchEmployees(): Promise<any[]> {
+  try {
+    const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.employees}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      mode: "cors",
+      signal: AbortSignal.timeout(10000),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch employees: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    
+    // Handle response structure consistently
+    let employees: any[] = []
+    if (data && typeof data === 'object') {
+      if (data.success && data.data && data.data.employees && Array.isArray(data.data.employees)) {
+        // Handle nested structure: {success: true, data: {employees: [...], ...}}
+        employees = data.data.employees
+      } else if (data.success && Array.isArray(data.data)) {
+        // Handle flat structure: {success: true, data: [...]}
+        employees = data.data
+      } else if (Array.isArray(data)) {
+        // Handle direct array: [...]
+        employees = data
+      } else {
+        console.log("[v0] Unexpected API response structure:", Object.keys(data))
+        if (data.data && typeof data.data === 'object') {
+          console.log("[v0] data.data structure:", Object.keys(data.data))
+        }
+        throw new Error("Invalid employees response structure")
+      }
+    } else {
+      throw new Error("Invalid API response format")
+    }
+    
+    console.log("[v0] Successfully fetched employees from API:", employees.length, "employees")
+    return employees
+  } catch (error) {
+    console.error("[v0] Failed to fetch employees:", error)
+    throw error
+  }
+}
+
+  // NEW: Comprehensive fetchTransactions method
+  async fetchTransactions(filters: TransactionFilters = {}): Promise<TransactionResponse> {
     try {
-      const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.employees}`, {
+      // Build query parameters
+      const queryParams = new URLSearchParams()
+      
+      if (filters.username) queryParams.append('username', filters.username)
+      if (filters.date_from) queryParams.append('date_from', filters.date_from)
+      if (filters.date_to) queryParams.append('date_to', filters.date_to)
+      if (filters.search) queryParams.append('search', filters.search)
+      if (filters.limit) queryParams.append('limit', filters.limit.toString())
+      if (filters.offset) queryParams.append('offset', filters.offset.toString())
+
+      const url = `${this.config.baseUrl}${API_ENDPOINTS.transactions}${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+      
+      console.log("[v0] Fetching transactions from:", url)
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        mode: "cors",
+        signal: AbortSignal.timeout(15000),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch transactions: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      
+      console.log("[v0] Successfully fetched transactions:", data.data?.length || 0, "transactions")
+      console.log("[v0] Transaction pagination:", { total: data.total, limit: data.limit, offset: data.offset })
+      
+      return data as TransactionResponse
+    } catch (error) {
+      console.error("[v0] Failed to fetch transactions:", error)
+      throw error
+    }
+  }
+
+  // NEW: Fetch transaction statistics
+  async fetchTransactionStats(days: number = 30): Promise<TransactionStats> {
+    try {
+      const url = `${this.config.baseUrl}${API_ENDPOINTS.transactions}/stats?days=${days}`
+      
+      console.log("[v0] Fetching transaction stats for", days, "days")
+
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -122,14 +260,55 @@ export class ApiService {
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch employees: ${response.statusText}`)
+        throw new Error(`Failed to fetch transaction stats: ${response.status} ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log("[v0] Successfully fetched employees from API:", data.length, "employees")
+      
+      console.log("[v0] Successfully fetched transaction stats:", data)
+      
+      return data as TransactionStats
+    } catch (error) {
+      console.error("[v0] Failed to fetch transaction stats:", error)
+      throw error
+    }
+  }
+
+  // NEW: Fetch transactions for specific user
+  async fetchUserTransactions(username: string, filters: Omit<TransactionFilters, 'username'> = {}): Promise<any> {
+    try {
+      const queryParams = new URLSearchParams()
+      
+      if (filters.date_from) queryParams.append('date_from', filters.date_from)
+      if (filters.date_to) queryParams.append('date_to', filters.date_to)
+      if (filters.limit) queryParams.append('limit', filters.limit.toString())
+      if (filters.offset) queryParams.append('offset', filters.offset.toString())
+
+      const url = `${this.config.baseUrl}${API_ENDPOINTS.transactions}/user/${encodeURIComponent(username)}${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+      
+      console.log("[v0] Fetching transactions for user:", username)
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        mode: "cors",
+        signal: AbortSignal.timeout(15000),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch user transactions: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      
+      console.log("[v0] Successfully fetched transactions for user", username, ":", data.data?.length || 0, "transactions")
+      console.log("[v0] User activity summary:", data.activity_summary)
+      
       return data
     } catch (error) {
-      console.error("[v0] Failed to fetch employees:", error)
+      console.error(`[v0] Failed to fetch transactions for user ${username}:`, error)
       throw error
     }
   }
@@ -142,18 +321,19 @@ export class ApiService {
       try {
         const checkoutPayload = {
           items: items.map(item => ({
-            item_id: item.id,
-            quantity_taken: item.quantity || 1,
-            new_balance: item.balance,
-            notes: `Checkout via POS system - User processed ${item.quantity || 1} units`
+            item_no: item.item_no || item.id, // Fixed: use correct field name
+            quantity: item.quantity || 1,
+            item_name : item.item_name || item.name || 'Unknown'
           })),
-          timestamp: new Date().toISOString(),
-          user_id: "pos_system"
+          checkout_by: "pos_system",
+          notes: `Checkout via POS system - ${items.length} items processed`,
+          timestamp: new Date().toISOString()
         }
 
         console.log("[v0] Attempting bulk checkout:", checkoutPayload)
 
-        const checkoutResponse = await fetch(`${this.config.baseUrl}/api/checkout`, {
+        // Fixed: Use the correct checkout endpoint from the server code
+        const checkoutResponse = await fetch(`${this.config.baseUrl}/api/items/checkout`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -185,13 +365,14 @@ export class ApiService {
         try {
           const itemOutPayload = {
             quantity: item.quantity || 1,
-            user_id: "pos_system",
-            notes: `POS checkout - ${item.quantity || 1} units taken`
+            out_by: "pos_system",
+            notes: `POS checkout - ${item.quantity || 1} units taken`,
+            item_name: item.item_name || item.name // ✅ Add this if your API needs it
           }
 
-          console.log(`[v0] Recording item ${item.id} (${item.name || 'Unknown'}) going out:`, itemOutPayload)
+          console.log(`[v0] Recording item ${item.item_no || item.id} (${item.item_name || item.name || 'Unknown'}) going out:`, itemOutPayload)
 
-          const response = await fetch(`${this.config.baseUrl}/api/items/${item.id}/out`, {
+          const response = await fetch(`${this.config.baseUrl}/api/items/${item.item_no || item.id}/out`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -204,10 +385,10 @@ export class ApiService {
           if (response.ok) {
             const result = await response.json()
             if (result.success) {
-              console.log(`[v0] ✅ Successfully recorded item ${item.id} going out - Balance: ${result.data.transaction.previous_balance} → ${result.data.transaction.new_balance}`)
+              console.log(`[v0] ✅ Successfully recorded item ${item.item_no || item.id} going out - Balance: ${result.data.transaction.previous_balance} → ${result.data.transaction.new_balance}`)
               return { 
                 success: true, 
-                item_id: item.id, 
+                item_id: item.item_no || item.id, 
                 data: result.data,
                 previous_balance: result.data.transaction.previous_balance,
                 new_balance: result.data.transaction.new_balance
@@ -221,8 +402,8 @@ export class ApiService {
           }
 
         } catch (error) {
-          console.warn(`[v0] ❌ Failed to record item ${item.id} going out:`, error)
-          return { success: false, item_id: item.id, error: error instanceof Error ? error.message : String(error) }
+          console.warn(`[v0] ❌ Failed to record item ${item.item_no || item.id} going out:`, error)
+          return { success: false, item_id: item.item_no || item.id, error: error instanceof Error ? error.message : String(error) }
         }
       })
 
@@ -260,7 +441,8 @@ export class ApiService {
       const payload = {
         update_type: updateType,
         value: value,
-        notes: notes || `Quantity update via POS system`
+        notes: notes || `Quantity update via POS system`,
+        updated_by: "pos_system" // Added missing field
       }
 
       console.log(`[v0] Updating quantity for item ${itemId}:`, payload)
@@ -296,6 +478,7 @@ export class ApiService {
   async logTransaction(transactionData: {
     userId: string;
     items: any[];
+    username: string;
     totalItems: number;
     timestamp: string;
   }): Promise<boolean> {
@@ -318,11 +501,17 @@ export class ApiService {
           console.log("[v0] Transactions endpoint not available, skipping transaction log")
           return false
         }
-        throw new Error(`Failed to log transaction: ${response.statusText}`)
+        throw new Error(`Failed to log transaction: ${response.status} ${response.statusText}`)
       }
 
-      console.log("[v0] Successfully logged transaction to API")
-      return true
+      const result = await response.json()
+      if (result.success) {
+        console.log("[v0] Successfully logged transaction to API")
+        return true
+      } else {
+        console.warn("[v0] Transaction log failed:", result.error)
+        return false
+      }
     } catch (error) {
       console.warn("[v0] Failed to log transaction (non-critical):", error)
       return false

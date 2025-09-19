@@ -13,6 +13,12 @@ import { apiService } from "@/lib/api-config"
 import { useToast } from "@/hooks/use-toast"
 import type { CartItem } from "@/app/page"
 
+// Define the Employee type if not already imported
+type Employee = {
+  id: number
+  name?: string
+}
+
 interface CartViewProps {
   items: CartItem[]
   onUpdateQuantity: (id: string, quantity: number) => void
@@ -79,7 +85,7 @@ export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrow
     setIsCheckoutOpen(true)
   }
 
-  const handleConfirmCheckout = async (userId: string) => {
+  const handleConfirmCheckout = async (employee: Employee) => {
     setIsCommitting(true)
 
     try {
@@ -111,7 +117,8 @@ export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrow
           // Try to log the transaction for audit trail
           try {
             await apiService.logTransaction({
-              userId,
+              userId: employee.id.toString(),
+              username: employee.name ?? "N/A",
               items: itemUpdates,
               totalItems,
               timestamp: new Date().toISOString(),
@@ -140,7 +147,7 @@ export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrow
 
           toast({
             title: "Checkout Completed (Local Only) ⚠️",
-            description: `${errorMessage} User: ${userId}`,
+            description: `${errorMessage} User: ${employee.id.toString()}`,
             variant: "default", // Changed from destructive since it's not really an error
           })
 
@@ -155,12 +162,12 @@ export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrow
 
         toast({
           title: "Checkout Completed (Local Only) 📝",
-          description: `API not connected. User: ${userId}, Total: ${totalItems} items`,
+          description: `API not connected. User: ${employee.id.toString()}, Total: ${totalItems} items`,
         })
       }
 
       const checkoutSummary = {
-        userId,
+        userId: employee.id.toString(),
         totalItems: totalItems,
         itemCount: items.length,
         items: items.map((item) => ({
@@ -180,7 +187,7 @@ export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrow
 
       setIsCheckoutOpen(false)
 
-      setCheckoutData({ userId, totalItems })
+      setCheckoutData({ userId: employee.id.toString(), totalItems })
       setShowSuccessCountdown(true)
     } catch (error) {
       console.error("[v0] Checkout process failed:", error)
