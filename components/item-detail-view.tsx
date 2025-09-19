@@ -84,6 +84,11 @@ export function ItemDetailView({ product, onAddToCart, onBack }: ItemDetailViewP
 
             <div className="space-y-3 text-slate-600 dark:text-slate-300">
               <div className="flex justify-between">
+                <span className="font-medium">Item Number:</span>
+                <span>{product.id}</span>
+              </div>
+
+              <div className="flex justify-between">
                 <span className="font-medium">Brand:</span>
                 <span>{product.brand}</span>
               </div>
