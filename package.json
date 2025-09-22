@@ -6,7 +6,24 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "electron-dev": "concurrently \"cross-env BROWSER=none npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron-build": "next build && next export -o out && electron-builder",
+    "build-win": "next build && next export -o out && electron-builder --win --publish never"
+  },
+  "main": "main.js",
+  "build": {
+    "appId": "com.yourcompany.app",
+    "productName": "My Next.js App",
+    "files": [
+      "out/**/*",
+      "main.js",
+      "preload.js"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/placeholder-logo.png"
+    }
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -9,6 +9,11 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // For Electron support
+  output: 'export',
+  distDir: 'out',
+  // Adjust for static export
+  trailingSlash: true,
 }
 
 export default nextConfig
