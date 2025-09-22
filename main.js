@@ -1,9 +1,15 @@
 // main.js - Electron main process
 const { app, BrowserWindow } = require('electron');
-const serve = require('electron-serve');
 const path = require('path');
 
-const loadURL = serve({ directory: 'out' });
+// Import electron-serve correctly
+let loadURL;
+try {
+  const serve = require('electron-serve');
+  loadURL = serve({ directory: 'out' });
+} catch (err) {
+  console.log('electron-serve not available in dev mode');
+}
 
 // Keep a global reference of the mainWindow object
 let mainWindow;
@@ -35,7 +41,11 @@ async function createWindow() {
     mainWindow.webContents.openDevTools();
   } else {
     // Load the index.html when not in development
-    await loadURL(mainWindow);
+    if (loadURL) {
+      await loadURL(mainWindow);
+    } else {
+      await mainWindow.loadFile(path.join(__dirname, 'out/index.html'));
+    }
   }
 
   mainWindow.on('closed', () => {
