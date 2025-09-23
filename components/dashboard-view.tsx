@@ -1,6 +1,6 @@
 import type React from "react"
 import { useState, useMemo, useEffect, useRef } from "react"
-import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw, ZapIcon, Settings, Wifi, WifiOff } from "lucide-react"
+import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw, ZapIcon, Settings, Wifi, WifiOff, Download, FileText, FileSpreadsheet, Code } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-config"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { exportToCSV, exportToXLSX, exportToJSON, prepareExportData } from "@/lib/export-utils"
 import type { Product } from "@/app/page"
 
 interface DashboardViewProps {
@@ -57,6 +59,7 @@ export function DashboardView({
   const [isScanning, setIsScanning] = useState(false)
   const [isBarcodeScanned, setIsBarcodeScanned] = useState(false)
   const [lastKeyTime, setLastKeyTime] = useState<number>(0)
+  const [isExporting, setIsExporting] = useState(false)
   const { toast } = useToast()
 
   const ITEMS_PER_PAGE = 50
@@ -219,6 +222,94 @@ export function DashboardView({
     setTimeout(() => {
       fetchProductsFromAPI()
     }, 500)
+  }
+
+  // Export handlers
+  const handleExportCSV = async () => {
+    try {
+      setIsExporting(true)
+      const exportData = prepareExportData(
+        products, 
+        apiUrl, 
+        isConnected, 
+        lastFetchTime?.toISOString() || null
+      )
+      
+      const filename = `toolbox-inventory-${new Date().toISOString().split('T')[0]}`
+      exportToCSV(exportData, { filename, includeMetadata: true })
+      
+      toast({
+        title: "Export Successful",
+        description: `Inventory data exported to ${filename}.csv`,
+      })
+    } catch (error) {
+      console.error('Export to CSV failed:', error)
+      toast({
+        title: "Export Failed",
+        description: "Failed to export data to CSV. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleExportXLSX = async () => {
+    try {
+      setIsExporting(true)
+      const exportData = prepareExportData(
+        products, 
+        apiUrl, 
+        isConnected, 
+        lastFetchTime?.toISOString() || null
+      )
+      
+      const filename = `toolbox-inventory-${new Date().toISOString().split('T')[0]}`
+      exportToXLSX(exportData, { filename, includeMetadata: true })
+      
+      toast({
+        title: "Export Successful",
+        description: `Inventory data exported to ${filename}.xlsx`,
+      })
+    } catch (error) {
+      console.error('Export to XLSX failed:', error)
+      toast({
+        title: "Export Failed",
+        description: "Failed to export data to Excel. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleExportJSON = async () => {
+    try {
+      setIsExporting(true)
+      const exportData = prepareExportData(
+        products, 
+        apiUrl, 
+        isConnected, 
+        lastFetchTime?.toISOString() || null
+      )
+      
+      const filename = `toolbox-inventory-${new Date().toISOString().split('T')[0]}`
+      exportToJSON(exportData, { filename, includeMetadata: true })
+      
+      toast({
+        title: "Export Successful",
+        description: `Inventory data exported to ${filename}.json`,
+      })
+    } catch (error) {
+      console.error('Export to JSON failed:', error)
+      toast({
+        title: "Export Failed",
+        description: "Failed to export data to JSON. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   useEffect(() => {
@@ -656,37 +747,140 @@ export function DashboardView({
           {lastFetchTime && <div>Last updated: {lastFetchTime.toLocaleTimeString()}</div>}
         </div>
         
-        {/* API Settings Dialog */}
+        {/* Settings Dialog with Tabs */}
         <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center space-x-2">
                 <Settings className="w-5 h-5" />
-                <span>API Configuration</span>
+                <span>Dashboard Settings</span>
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="dashboard-api-url">API Base URL</Label>
-                <Input
-                  id="dashboard-api-url"
-                  placeholder="http://192.168.68.106:3001"
-                  value={tempApiUrl}
-                  onChange={(e) => setTempApiUrl(e.target.value)}
-                  className="font-mono text-sm"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Enter the base URL for your API server. Changes will take effect after saving.
-                </p>
-              </div>
-              <div className="flex space-x-2">
-                <Button onClick={handleSaveSettings} className="flex-1">
-                  Save Settings
-                </Button>
-                <Button variant="outline" onClick={() => setIsSettingsOpen(false)} className="flex-1">
-                  Cancel
-                </Button>
-              </div>
+            <div className="py-4">
+              <Tabs defaultValue="api" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="api">API Configuration</TabsTrigger>
+                  <TabsTrigger value="export">Export Data</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="api" className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="dashboard-api-url">API Base URL</Label>
+                    <Input
+                      id="dashboard-api-url"
+                      placeholder="http://192.168.68.106:3001"
+                      value={tempApiUrl}
+                      onChange={(e) => setTempApiUrl(e.target.value)}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Enter the base URL for your API server. Changes will take effect after saving.
+                    </p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button onClick={handleSaveSettings} className="flex-1">
+                      Save Settings
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsSettingsOpen(false)} className="flex-1">
+                      Cancel
+                    </Button>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="export" className="space-y-4 mt-4">
+                  <div className="space-y-4">
+                    <div className="text-sm text-muted-foreground">
+                      Export your inventory data in different formats. All exports include {products.length} items.
+                      <br />
+                      <span className="text-xs">
+                        Data source: {dataSource === 'api' ? 'Live API' : 'Cached'} 
+                        {lastFetchTime && ` (last updated: ${lastFetchTime.toLocaleString()})`}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 gap-3">
+                      <Card className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <FileText className="w-8 h-8 text-green-600" />
+                            <div>
+                              <h4 className="font-medium">CSV Format</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Comma-separated values, ideal for spreadsheets
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            onClick={handleExportCSV} 
+                            disabled={isExporting || products.length === 0}
+                            size="sm"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Export CSV
+                          </Button>
+                        </div>
+                      </Card>
+                      
+                      <Card className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <FileSpreadsheet className="w-8 h-8 text-blue-600" />
+                            <div>
+                              <h4 className="font-medium">Excel Format</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Excel workbook with multiple sheets and summaries
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            onClick={handleExportXLSX} 
+                            disabled={isExporting || products.length === 0}
+                            size="sm"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Export XLSX
+                          </Button>
+                        </div>
+                      </Card>
+                      
+                      <Card className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <Code className="w-8 h-8 text-orange-600" />
+                            <div>
+                              <h4 className="font-medium">JSON Format</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Structured data format for developers and APIs
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            onClick={handleExportJSON} 
+                            disabled={isExporting || products.length === 0}
+                            size="sm"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Export JSON
+                          </Button>
+                        </div>
+                      </Card>
+                    </div>
+                    
+                    {products.length === 0 && (
+                      <div className="text-center p-4 text-muted-foreground">
+                        <p>No data available to export. Please load inventory data first.</p>
+                      </div>
+                    )}
+                    
+                    {isExporting && (
+                      <div className="text-center p-4">
+                        <Progress value={undefined} className="w-full h-2" />
+                        <p className="text-sm text-muted-foreground mt-2">Preparing export...</p>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
             </div>
           </DialogContent>
         </Dialog>
