@@ -1,71 +1,16 @@
 import type React from "react"
-import { useState, useMemo, useEffect } from "react"
-import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw } from "lucide-react"
+import { useState, useMemo, useEffect, useRef } from "react"
+import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw, ZapIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-config"
 import type { Product } from "@/app/page"
-
-
-const generateMockProducts = (): Product[] => {
-  const baseProducts = [
-    {
-      name: "Lorem ipsum dolor sit amet, consectetur adipiscing elit",
-      brand: "Praesent",
-      itemType: "sit amet ornare",
-      location: "Praesent est odio",
-    },
-    {
-      name: "Sed do eiusmod tempor incididunt ut labore",
-      brand: "Ut enim",
-      itemType: "sit amet ornare",
-      location: "Interdum et malesuada fames",
-    },
-    {
-      name: "Ut enim ad minim veniam quis nostrud",
-      brand: "Exercitation",
-      itemType: "Interdum et malesuada fames",
-      location: "Interdum et malesuada fames",
-    },
-    {
-      name: "Duis aute irure dolor in reprehenderit",
-      brand: "Voluptate",
-      itemType: "sit amet ornare",
-      location: "Praesent est odio",
-    },
-    {
-      name: "Excepteur sint occaecat cupidatat non proident",
-      brand: "Sunt in culpa",
-      itemType: "Interdum et malesuada fames",
-      location: "Interdum et malesuada fames",
-    },
-  ]
-
-  const products: Product[] = []
-  const statuses: Product["status"][] = ["in-stock", "low-stock", "out-of-stock"]
-
-  for (let i = 0; i < 200; i++) {
-    const baseProduct = baseProducts[i % baseProducts.length]
-    const status = statuses[i % statuses.length]
-
-    products.push({
-      id: (i + 1).toString(),
-      name: `${baseProduct.name} - Item ${i + 1}`,
-      brand: baseProduct.brand,
-      itemType: baseProduct.itemType,
-      location: baseProduct.location,
-      balance: status === "out-of-stock" ? 0 : Math.floor(Math.random() * 20) + 1,
-      status,
-    })
-  }
-
-  return products
-}
 
 interface DashboardViewProps {
   onAddToCart: (product: Product, quantity?: number) => void
@@ -77,7 +22,7 @@ interface DashboardViewProps {
 export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRefreshData }: DashboardViewProps) {
   const [products, setProducts] = useState<Product[]>([])
   const [isLoadingData, setIsLoadingData] = useState(true)
-  const [dataSource, setDataSource] = useState<"api" | "mock">("mock")
+  const [dataSource, setDataSource] = useState<"api" | "cached">("cached")
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -89,9 +34,72 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
   const [barcodeInput, setBarcodeInput] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [isScanning, setIsScanning] = useState(false)
+  const [isBarcodeScanned, setIsBarcodeScanned] = useState(false)
+  const [lastKeyTime, setLastKeyTime] = useState<number>(0)
   const { toast } = useToast()
 
   const ITEMS_PER_PAGE = 50
+  const BARCODE_SPEED_THRESHOLD = 100 // ms between characters to detect barcode scanner vs manual typing
+
+  // Check if localStorage is available (not server-side rendering)
+  const isLocalStorageAvailable = () => {
+    if (typeof window === 'undefined') return false;
+    try {
+      // Test if localStorage is accessible
+      const testKey = '__test__';
+      localStorage.setItem(testKey, testKey);
+      localStorage.removeItem(testKey);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Function to save products to localStorage
+  const saveProductsToLocalStorage = (products: Product[]) => {
+    if (!isLocalStorageAvailable()) {
+      console.log("[v0] localStorage not available, skipping save");
+      return;
+    }
+    
+    try {
+      localStorage.setItem('cached-products', JSON.stringify(products));
+      localStorage.setItem('cached-products-timestamp', new Date().toISOString());
+      console.log("[v0] Saved products to local storage:", products.length);
+    } catch (error) {
+      console.error("[v0] Error saving products to local storage:", error);
+    }
+  };
+
+  // Function to load products from localStorage
+  const loadProductsFromLocalStorage = (): { products: Product[] | null, timestamp: Date | null } => {
+    if (!isLocalStorageAvailable()) {
+      console.log("[v0] localStorage not available, cannot load products");
+      return { products: null, timestamp: null };
+    }
+    
+    try {
+      const productsJson = localStorage.getItem('cached-products');
+      const timestampStr = localStorage.getItem('cached-products-timestamp');
+      
+      if (!productsJson) {
+        console.log("[v0] No products found in local storage");
+        return { products: null, timestamp: null };
+      }
+      
+      const products = JSON.parse(productsJson) as Product[];
+      const timestamp = timestampStr ? new Date(timestampStr) : null;
+      
+      console.log("[v0] Loaded products from local storage:", products.length);
+      console.log("[v0] Local data timestamp:", timestamp);
+      
+      return { products, timestamp };
+    } catch (error) {
+      console.error("[v0] Error loading products from local storage:", error);
+      return { products: null, timestamp: null };
+    }
+  };
 
   const fetchProductsFromAPI = async () => {
     try {
@@ -133,23 +141,46 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
       setProducts(transformedProducts)
       setDataSource("api")
       setLastFetchTime(new Date())
+      
+      // Save the API data to localStorage for offline use
+      saveProductsToLocalStorage(transformedProducts);
 
       toast({
         title: "Data Loaded",
         description: `Successfully loaded ${transformedProducts.length} items from API`,
       })
     } catch (error) {
-      console.error("[v0] Failed to fetch from API, falling back to mock data:", error)
-
-      const mockProducts = generateMockProducts()
-      setProducts(mockProducts)
-      setDataSource("mock")
-
-      toast({
-        title: "Using Mock Data",
-        description: "API unavailable, using sample data for demonstration",
-        variant: "destructive",
-      })
+      console.error("[v0] Failed to fetch from API, trying to use cached data:", error)
+      
+      // Try to get data from localStorage first
+      const { products: cachedProducts, timestamp } = loadProductsFromLocalStorage();
+      
+      if (cachedProducts && cachedProducts.length > 0) {
+        // Use cached API data if available
+        setProducts(cachedProducts)
+        setDataSource("cached") // Mark as cached API data
+        setLastFetchTime(timestamp)
+        
+        const timeDiff = timestamp ? Math.round((new Date().getTime() - timestamp.getTime()) / (1000 * 60 * 60)) : null;
+        const timeMsg = timeDiff ? ` (from ${timeDiff} hour${timeDiff === 1 ? '' : 's'} ago)` : '';
+        
+        toast({
+          title: "Using Cached API Data",
+          description: `API unavailable. Using previously downloaded data${timeMsg}`,
+          variant: "default",
+        })
+      } else {
+        // No cached data available and API is down - show empty state
+        console.error("[v0] No cached data available and API is down");
+        setProducts([])
+        setDataSource("cached")
+        
+        toast({
+          title: "No Data Available",
+          description: "API unavailable and no previously downloaded data found. Please restore connection to load data.",
+          variant: "destructive",
+        })
+      }
     } finally {
       setIsLoadingData(false)
     }
@@ -160,8 +191,36 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
   }
 
   useEffect(() => {
-    fetchProductsFromAPI()
+    // Try to load cached data immediately while we wait for API response
+    const { products: cachedProducts, timestamp } = loadProductsFromLocalStorage();
+    
+    if (cachedProducts && cachedProducts.length > 0) {
+      console.log("[v0] Using cached data while fetching from API");
+      setProducts(cachedProducts);
+      setDataSource("cached");
+      setLastFetchTime(timestamp);
+      setIsLoadingData(false); // Show cached data immediately
+      
+      // Then fetch fresh data from API
+      fetchProductsFromAPI();
+    } else {
+      // No cached data, just fetch from API
+      fetchProductsFromAPI();
+    }
   }, [])
+
+  /**
+   * Validates that the entered value corresponds to a valid item ID
+   * @returns The found product or null if not found
+   */
+  const validateItemId = (value: string): Product | null => {
+    if (!value.trim()) return null;
+    
+    // Search for product by ID (primary) or name (secondary)
+    return products.find(
+      (p) => p.id === value || p.name.toLowerCase().includes(value.toLowerCase())
+    ) || null;
+  }
 
   // Expose refresh function to parent component
   useEffect(() => {
@@ -169,6 +228,86 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
       onRefreshData(handleRefreshData)
     }
   }, [onRefreshData])
+  
+  // Global barcode scanner detection
+  useEffect(() => {
+    let barcodeBuffer = "";
+    
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      const currentTime = Date.now();
+      
+      // If this is likely from a barcode scanner based on typing speed
+      const isLikelyScanner = currentTime - lastKeyTime < BARCODE_SPEED_THRESHOLD;
+      setLastKeyTime(currentTime);
+      
+      // If there's a long pause, reset the buffer (manual typing)
+      if (!isLikelyScanner && barcodeBuffer.length > 0) {
+        barcodeBuffer = "";
+        setIsScanning(false);
+      }
+      
+      // Handle Enter key (typical end of barcode scan)
+      if (event.key === 'Enter' && barcodeBuffer.length > 0) {
+        // Only process if not in an input field
+        if (document.activeElement?.tagName !== 'INPUT' && 
+            document.activeElement?.tagName !== 'TEXTAREA') {
+          
+          // Set the barcode input and trigger scan detection
+          setBarcodeInput(barcodeBuffer);
+          setIsScanning(true);
+          setIsBarcodeScanned(true);
+          
+          // Process the barcode after a short delay to ensure UI updates
+          setTimeout(() => {
+            const foundProduct = validateItemId(barcodeBuffer);
+            
+            if (foundProduct) {
+              onAddToCart(foundProduct);
+              toast({
+                title: "Item Added",
+                description: `${foundProduct.name} has been added to your toolbox`,
+              });
+            } else {
+              toast({
+                title: "Item Not Found",
+                description: `No item found with ID: ${barcodeBuffer}`,
+                variant: "destructive",
+              });
+            }
+            
+            // Reset state
+            setBarcodeInput("");
+            setIsScanning(false);
+            setIsBarcodeScanned(false);
+          }, 50);
+        }
+        
+        // Reset buffer regardless
+        barcodeBuffer = "";
+        return;
+      }
+      
+      // Only add printable characters to buffer
+      if (event.key.length === 1 && /[\w\d]/.test(event.key)) {
+        barcodeBuffer += event.key;
+        
+        if (isLikelyScanner) {
+          // Don't set scanning UI unless we have multiple chars (to avoid false positives)
+          if (barcodeBuffer.length > 1) {
+            setIsScanning(true);
+          }
+        }
+      }
+    };
+    
+    // Add global listener
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [lastKeyTime, onAddToCart, toast]);
 
   // Update local search when header search changes
   useEffect(() => {
@@ -280,43 +419,121 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
         return "Unknown"
     }
   }
+  
+  /**
+   * Formats feedback messages for barcode scanning vs manual entry
+   */
+  const getScanFeedbackText = (): string => {
+    if (isScanning) {
+      return "Barcode scan detected! Processing item...";
+    } else if (isBarcodeScanned) {
+      return "Barcode scan processed! Item will be added automatically.";
+    } else if (barcodeInput.trim()) {
+      return "Manual entry detected. Press Enter or click Add to add this item.";
+    } else {
+      return "Ready to scan item barcode (auto-adds) or enter item ID manually.";
+    }
+  }
 
+  /**
+   * Detects whether input is from a barcode scanner or manual typing
+   * based on the timing between keystrokes
+   */
+  const detectScanMethod = (currentTime: number): boolean => {
+    // If time between keystrokes is less than threshold, likely a scanner
+    const isScanner = currentTime - lastKeyTime < BARCODE_SPEED_THRESHOLD;
+    setLastKeyTime(currentTime);
+    return isScanner;
+  }
+
+  /**
+   * Handles the barcode input change
+   * Detects if input is from scanner and acts accordingly
+   */
+  const handleBarcodeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setBarcodeInput(value);
+    
+    // Detect if this is likely from a scanner based on typing speed
+    const currentTime = Date.now();
+    const isLikelyScanner = detectScanMethod(currentTime);
+    
+    // Only set scanning indicator if the input is fast enough to be from a scanner
+    // and there are multiple characters
+    if (isLikelyScanner && value.length > 1) {
+      setIsScanning(true);
+      setIsBarcodeScanned(true);
+    } else {
+      setIsBarcodeScanned(false);
+    }
+  }
+
+  /**
+   * Handles the submission of a barcode/item ID
+   * Called either manually by button press or automatically from scanner
+   */
   const handleBarcodeSubmit = () => {
+    setIsScanning(false);
+    
     if (!barcodeInput.trim()) {
       toast({
-        title: "Invalid Barcode",
-        description: "Please enter a valid barcode",
+        title: "Invalid Item ID",
+        description: "Please enter a valid item ID or scan a barcode",
         variant: "destructive",
       })
       return
     }
 
-    // Mock barcode lookup - in a real app this would query an API
-    const foundProduct = products.find(
-      (p) => p.id === barcodeInput || p.name.toLowerCase().includes(barcodeInput.toLowerCase()),
-    )
+    // Validate the item ID
+    const foundProduct = validateItemId(barcodeInput);
 
     if (foundProduct) {
       onAddToCart(foundProduct)
       setBarcodeInput("")
+      setIsBarcodeScanned(false)
       toast({
         title: "Item Added",
         description: `${foundProduct.name} has been added to your toolbox`,
       })
     } else {
       toast({
-        title: "Product Not Found",
-        description: "No product found with that barcode",
+        title: "Item Not Found",
+        description: `No item found with ID: ${barcodeInput}`,
         variant: "destructive",
       })
     }
   }
 
+  /**
+   * Handles key presses in the barcode input field
+   * Auto-submits on Enter key
+   */
   const handleBarcodeKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleBarcodeSubmit()
+      e.preventDefault()
     }
   }
+  
+  /**
+   * Effect to automatically submit when a barcode is scanned
+   * Only triggers when input is determined to be from a scanner
+   */
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
+    if (isScanning && isBarcodeScanned && barcodeInput.trim()) {
+      // Short delay to ensure complete barcode is captured
+      timer = setTimeout(() => {
+        console.log("[Dashboard] Auto-adding item from barcode scan:", barcodeInput);
+        handleBarcodeSubmit();
+      }, 50);
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [barcodeInput, isScanning, isBarcodeScanned]);
 
   if (isLoadingData) {
     return (
@@ -324,6 +541,32 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
         <div className="text-center space-y-4">
           <div className="w-12 h-12 border-4 border-accent/20 border-t-accent rounded-full animate-spin mx-auto"></div>
           <p className="text-slate-600 dark:text-slate-400">Loading products...</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // Show empty state if no products are available
+  if (!isLoadingData && (!products || products.length === 0)) {
+    return (
+      <div className="flex h-screen bg-slate-50 dark:bg-slate-900 items-center justify-center">
+        <div className="text-center space-y-4 max-w-md p-6 bg-white dark:bg-slate-800 rounded-lg shadow-lg">
+          <div className="w-16 h-16 mx-auto text-slate-400 dark:text-slate-500">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 12H4M8 16l-4-4 4-4M16 16l4-4-4-4" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">No Data Available</h3>
+          <p className="text-slate-600 dark:text-slate-400">
+            There are no items available. Please check your API connection and try again.
+          </p>
+          <Button 
+            onClick={handleRefreshData} 
+            className="mt-4"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry Connection
+          </Button>
         </div>
       </div>
     )
@@ -346,8 +589,11 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
         <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
           <div className="flex items-center justify-between">
             <span>Data Source:</span>
-            <Badge variant={dataSource === "api" ? "default" : "secondary"} className="text-xs">
-              {dataSource === "api" ? "API" : "Mock"}
+            <Badge 
+              variant={dataSource === "api" ? "default" : "outline"} 
+              className="text-xs"
+            >
+              {dataSource === "api" ? "API" : "Cached API"}
             </Badge>
           </div>
           {lastFetchTime && <div>Last updated: {lastFetchTime.toLocaleTimeString()}</div>}
@@ -404,27 +650,67 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
 
         {/* Barcode Scanner */}
         <div className="space-y-3">
-          <h3 className="font-medium text-slate-900 dark:text-slate-100">Barcode Scanner</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium text-slate-900 dark:text-slate-100">Item Scanner</h3>
+            {isScanning && (
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800 animate-pulse">
+                Scanning...
+              </Badge>
+            )}
+          </div>
+          
+          <div className="text-xs bg-slate-100 dark:bg-slate-700 p-2 rounded-md text-slate-600 dark:text-slate-300 space-y-1">
+            <div className="flex items-center">
+              <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
+              <span><strong>Barcode scan:</strong> Items added automatically</span>
+            </div>
+            <div className="flex items-center">
+              <span className="w-3 h-3 bg-teal-500 rounded-full mr-2"></span>
+              <span><strong>Manual entry:</strong> Requires button press</span>
+            </div>
+          </div>
+          
           <div className="space-y-2">
             <div className="relative">
-              <Scan className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <Scan className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${
+                isScanning ? "text-green-500" : "text-slate-400"
+              }`} />
               <Input
-                placeholder="Scan barcode..."
+                placeholder="Scan item barcode or enter ID..."
                 value={barcodeInput}
-                onChange={(e) => setBarcodeInput(e.target.value)}
+                onChange={handleBarcodeInputChange}
                 onKeyPress={handleBarcodeKeyPress}
-                className="pl-10"
+                className={`pl-10 ${
+                  isScanning 
+                    ? "border-green-500 ring-1 ring-green-500 dark:border-green-500" 
+                    : ""
+                }`}
               />
+              {isScanning && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
             </div>
+            
+            {/* Only show button if not scanning (for manual entry) */}
             <Button
               size="sm"
-              className="w-full bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600"
+              className={`w-full transition-all duration-200 ${
+                isBarcodeScanned
+                  ? "bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
+                  : "bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600"
+              }`}
               onClick={handleBarcodeSubmit}
               disabled={!barcodeInput.trim()}
             >
               <BarChart3 className="w-4 h-4 mr-2" />
               Add to Toolbox
             </Button>
+            
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              {getScanFeedbackText()}
+            </div>
           </div>
         </div>
       </div>
