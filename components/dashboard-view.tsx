@@ -1,6 +1,6 @@
 import type React from "react"
 import { useState, useMemo, useEffect, useRef } from "react"
-import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw, ZapIcon } from "lucide-react"
+import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw, ZapIcon, Settings, Wifi, WifiOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-config"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import type { Product } from "@/app/page"
 
 interface DashboardViewProps {
@@ -17,13 +19,31 @@ interface DashboardViewProps {
   onViewItem: (product: Product) => void
   searchQuery?: string
   onRefreshData?: (refreshFunction: () => void) => void // Callback to expose refresh function
+  apiUrl?: string
+  onApiUrlChange?: (url: string) => void
+  isConnected?: boolean
 }
 
-export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRefreshData }: DashboardViewProps) {
+export function DashboardView({ 
+  onAddToCart, 
+  onViewItem, 
+  searchQuery = "", 
+  onRefreshData,
+  apiUrl = "",
+  onApiUrlChange,
+  isConnected = false
+}: DashboardViewProps) {
   const [products, setProducts] = useState<Product[]>([])
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [dataSource, setDataSource] = useState<"api" | "cached">("cached")
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [tempApiUrl, setTempApiUrl] = useState(apiUrl)
+
+  // Keep tempApiUrl in sync with apiUrl prop
+  useEffect(() => {
+    setTempApiUrl(apiUrl)
+  }, [apiUrl])
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
@@ -189,6 +209,17 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
   const handleRefreshData = () => {
     fetchProductsFromAPI()
   }
+  
+  const handleSaveSettings = () => {
+    if (onApiUrlChange) {
+      onApiUrlChange(tempApiUrl)
+    }
+    setIsSettingsOpen(false)
+    // Refresh data after changing API URL
+    setTimeout(() => {
+      fetchProductsFromAPI()
+    }, 500)
+  }
 
   useEffect(() => {
     // Try to load cached data immediately while we wait for API response
@@ -313,6 +344,11 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
   useEffect(() => {
     setLocalSearchQuery(searchQuery)
   }, [searchQuery])
+  
+  // Update tempApiUrl when apiUrl prop changes
+  useEffect(() => {
+    setTempApiUrl(apiUrl)
+  }, [apiUrl])
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -581,12 +617,33 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
             <Filter className="w-4 h-4" />
             <span className="font-medium">Filters</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleRefreshData} disabled={isLoadingData} className="p-1">
-            <RefreshCw className={`w-4 h-4 ${isLoadingData ? "animate-spin" : ""}`} />
-          </Button>
+          <div className="flex space-x-1">
+            <Button variant="ghost" size="sm" onClick={() => setIsSettingsOpen(true)} className="p-1">
+              <Settings className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleRefreshData} disabled={isLoadingData} className="p-1">
+              <RefreshCw className={`w-4 h-4 ${isLoadingData ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         </div>
 
-        <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+        <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 bg-slate-50 dark:bg-slate-700/30 p-2 rounded-md">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-1">
+              {isConnected ? (
+                <Wifi className="w-3 h-3 text-green-500" />
+              ) : (
+                <WifiOff className="w-3 h-3 text-orange-500" />
+              )}
+              <span>API Status:</span>
+            </div>
+            <Badge 
+              variant={isConnected ? "default" : "outline"} 
+              className="text-xs"
+            >
+              {isConnected ? "Connected" : "Disconnected"}
+            </Badge>
+          </div>
           <div className="flex items-center justify-between">
             <span>Data Source:</span>
             <Badge 
@@ -598,6 +655,41 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
           </div>
           {lastFetchTime && <div>Last updated: {lastFetchTime.toLocaleTimeString()}</div>}
         </div>
+        
+        {/* API Settings Dialog */}
+        <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                <Settings className="w-5 h-5" />
+                <span>API Configuration</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="dashboard-api-url">API Base URL</Label>
+                <Input
+                  id="dashboard-api-url"
+                  placeholder="http://192.168.68.106:3001"
+                  value={tempApiUrl}
+                  onChange={(e) => setTempApiUrl(e.target.value)}
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter the base URL for your API server. Changes will take effect after saving.
+                </p>
+              </div>
+              <div className="flex space-x-2">
+                <Button onClick={handleSaveSettings} className="flex-1">
+                  Save Settings
+                </Button>
+                <Button variant="outline" onClick={() => setIsSettingsOpen(false)} className="flex-1">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Categories */}
         <div className="space-y-3">
