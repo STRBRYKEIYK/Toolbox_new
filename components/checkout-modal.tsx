@@ -184,7 +184,7 @@ export function CheckoutModal({ isOpen, onClose, items, onConfirmCheckout, isCom
       // Log the transaction to employee logs
       const transactionData = {
         username: selectedEmployee.fullName, // Use email or ID as username
-        details: `POS Checkout - ${totalItems} items (${items.map(item => `${item.name}(${item.quantity || 1})`).join(', ')})`,
+        details: `Checkout - ${totalItems}x items (${items.map(item => `${item.name}(${item.quantity || 1})`).join(', ')})`,
         log_date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
         log_time: new Date().toTimeString().split(' ')[0] // HH:MM:SS
       }

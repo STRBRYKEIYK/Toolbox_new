@@ -13,7 +13,7 @@ import { apiService } from "@/lib/api-config"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { exportToCSV, exportToXLSX, exportToJSON, prepareExportData } from "@/lib/export-utils"
+import { exportToCSV, exportToXLSX, exportToJSON, prepareExportData, exportLogsToXLSX } from "@/lib/export-utils"
 import type { Product } from "@/app/page"
 
 interface DashboardViewProps {
@@ -60,6 +60,11 @@ export function DashboardView({
   const [isBarcodeScanned, setIsBarcodeScanned] = useState(false)
   const [lastKeyTime, setLastKeyTime] = useState<number>(0)
   const [isExporting, setIsExporting] = useState(false)
+  const [logs, setLogs] = useState<any[]>([])
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false)
+  const [logsError, setLogsError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState("api")
+  const [hasLoadedLogs, setHasLoadedLogs] = useState(false)
   const { toast } = useToast()
 
   const ITEMS_PER_PAGE = 50
@@ -312,6 +317,96 @@ export function DashboardView({
     }
   }
 
+  // Logs fetching and export
+  const fetchLogsFromAPI = async () => {
+    try {
+      setIsLoadingLogs(true)
+      setLogsError(null)
+      
+      const resp = await apiService.fetchTransactions()
+
+      // TransactionResponse shape is { data: any[], ... }
+      const fetched = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.data) ? resp.data : [])
+
+      // Normalize fields: Username, details, log_date, log_time
+      const normalized = fetched.map((entry: any) => {
+        // Try common timestamp fields
+        const ts = entry.timestamp || entry.created_at || entry.log_timestamp || entry.datetime || entry.date
+        let logDate = ''
+        let logTime = ''
+        if (ts) {
+          try {
+            const d = new Date(ts)
+            if (!isNaN(d.getTime())) {
+              logDate = d.toLocaleDateString()
+              logTime = d.toLocaleTimeString()
+            }
+          } catch (e) {
+            // fallthrough
+          }
+        }
+
+        // Better details formatting - try to extract meaningful text from JSON
+        let details = entry.details || entry.action || entry.message || 'No details'
+        if (details === 'No details' && entry) {
+          // If it's a POS checkout, format it nicely
+          if (entry.action && entry.action.includes('POS Checkout')) {
+            details = entry.action
+          } else {
+            // Otherwise, show a shortened JSON
+            const jsonStr = JSON.stringify(entry)
+            details = jsonStr.length > 100 ? jsonStr.substring(0, 100) + '...' : jsonStr
+          }
+        }
+
+        return {
+          username: entry.username || entry.user || entry.user_name || entry.employee || 'Unknown',
+          details: details,
+          log_date: logDate,
+          log_time: logTime,
+          raw: entry,
+        }
+      })
+
+      setLogs(normalized)
+      setHasLoadedLogs(true)
+    } catch (error) {
+      console.error('[v0] Failed to fetch logs:', error)
+      setLogsError(String(error))
+      toast({ title: 'Failed to load logs', description: String(error), variant: 'destructive' })
+    } finally {
+      setIsLoadingLogs(false)
+    }
+  }
+
+  // Auto-load logs when Logs tab is opened
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+    if (value === 'logs' && !hasLoadedLogs && !isLoadingLogs) {
+      fetchLogsFromAPI()
+    }
+  }
+
+  const handleExportLogsXLSX = async () => {
+    try {
+      if (!logs || logs.length === 0) {
+        toast({ title: 'No Logs', description: 'No logs available to export', variant: 'destructive' })
+        return
+      }
+
+      setIsExporting(true)
+      const filename = `toolbox-logs-${new Date().toISOString().split('T')[0]}`
+      exportLogsToXLSX(logs, { filename })
+
+      toast({ title: 'Export Successful', description: `Logs exported to ${filename}.xlsx` })
+    } catch (error) {
+      console.error('Export logs failed:', error)
+      toast({ title: 'Export Failed', description: 'Failed to export logs to Excel', variant: 'destructive' })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   useEffect(() => {
     // Try to load cached data immediately while we wait for API response
     const { products: cachedProducts, timestamp } = loadProductsFromLocalStorage();
@@ -338,10 +433,8 @@ export function DashboardView({
   const validateItemId = (value: string): Product | null => {
     if (!value.trim()) return null;
     
-    // Search for product by ID (primary) or name (secondary)
-    return products.find(
-      (p) => p.id === value || p.name.toLowerCase().includes(value.toLowerCase())
-    ) || null;
+    // Search for product by exact ID match only
+    return products.find((p) => p.id === value.trim()) || null;
   }
 
   // Expose refresh function to parent component
@@ -749,7 +842,7 @@ export function DashboardView({
         
         {/* Settings Dialog with Tabs */}
         <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-          <DialogContent className="sm:max-w-2xl">
+          <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center space-x-2">
                 <Settings className="w-5 h-5" />
@@ -757,10 +850,11 @@ export function DashboardView({
               </DialogTitle>
             </DialogHeader>
             <div className="py-4">
-              <Tabs defaultValue="api" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+              <Tabs defaultValue="api" className="w-full" value={activeTab} onValueChange={handleTabChange}>
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="api">API Configuration</TabsTrigger>
                   <TabsTrigger value="export">Export Data</TabsTrigger>
+                  <TabsTrigger value="logs">Logs</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="api" className="space-y-4 mt-4">
@@ -878,6 +972,88 @@ export function DashboardView({
                         <p className="text-sm text-muted-foreground mt-2">Preparing export...</p>
                       </div>
                     )}
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="logs" className="space-y-4 mt-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">Employee Logs</h4>
+                        <p className="text-sm text-muted-foreground">Recent employee activity logs loaded automatically from the API.</p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button onClick={fetchLogsFromAPI} size="sm" disabled={isLoadingLogs} variant="outline">
+                          <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingLogs ? 'animate-spin' : ''}`} />
+                          Refresh
+                        </Button>
+                        <Button onClick={handleExportLogsXLSX} size="sm" disabled={isExporting || logs.length === 0}>
+                          <Download className="w-4 h-4 mr-2" />
+                          Export XLSX
+                        </Button>
+                      </div>
+                    </div>
+
+                    {isLoadingLogs && (
+                      <div className="flex items-center justify-center p-8 bg-slate-800/30 rounded-md border border-slate-700">
+                        <div className="text-center">
+                          <div className="w-8 h-8 border-2 border-slate-400 border-t-slate-200 rounded-full animate-spin mx-auto mb-3"></div>
+                          <p className="text-sm text-slate-400">Loading employee logs...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {logsError && (
+                      <div className="p-4 text-sm text-destructive">Error loading logs: {logsError}</div>
+                    )}
+
+                    {!isLoadingLogs && logs.length > 0 && (
+                      <div className="overflow-hidden bg-slate-900 rounded-md border border-slate-600">
+                        <div className="overflow-auto max-h-96">
+                          <table className="w-full text-sm table-fixed">
+                            <thead>
+                              <tr>
+                                <th className="p-2 text-left bg-slate-800 text-slate-100 sticky top-0 z-10 border-b border-slate-600 font-medium w-24">Username</th>
+                                <th className="p-2 text-left bg-slate-800 text-slate-100 sticky top-0 z-10 border-b border-slate-600 font-medium">Details</th>
+                                <th className="p-2 text-left bg-slate-800 text-slate-100 sticky top-0 z-10 border-b border-slate-600 font-medium w-24">Log Date</th>
+                                <th className="p-2 text-left bg-slate-800 text-slate-100 sticky top-0 z-10 border-b border-slate-600 font-medium w-20">Log Time</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {logs.map((l, idx) => (
+                                <tr key={idx} className={`${idx % 2 === 0 ? 'bg-slate-800/50' : 'bg-slate-700/50'} text-slate-100 hover:bg-slate-600/30 transition-colors`}>
+                                  <td className="p-2 align-top border-b border-slate-700/50 w-24">
+                                    <div className="break-words font-medium text-slate-200 text-xs">
+                                      {l.username}
+                                    </div>
+                                  </td>
+                                  <td className="p-2 align-top border-b border-slate-700/50">
+                                    <div className="break-words text-slate-300 text-xs leading-relaxed">
+                                      {l.details}
+                                    </div>
+                                  </td>
+                                  <td className="p-2 align-top border-b border-slate-700/50 w-24">
+                                    <div className="text-slate-200 text-xs whitespace-nowrap">
+                                      {l.log_date}
+                                    </div>
+                                  </td>
+                                  <td className="p-2 align-top border-b border-slate-700/50 w-20">
+                                    <div className="text-slate-200 text-xs whitespace-nowrap">
+                                      {l.log_time}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {!isLoadingLogs && logs.length === 0 && !logsError && (
+                      <div className="p-4 text-sm text-muted-foreground">No logs loaded. Click Fetch Logs to retrieve entries from the API.</div>
+                    )}
+
                   </div>
                 </TabsContent>
               </Tabs>

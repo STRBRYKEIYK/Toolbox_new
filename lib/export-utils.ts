@@ -208,3 +208,25 @@ export const prepareExportData = (
     }
   };
 };
+
+// Export logs specifically (array of normalized log objects)
+export const exportLogsToXLSX = (logs: Array<any>, options: ExportOptions = {}) => {
+  const { filename = 'logs-export', includeMetadata = false } = options;
+
+  // Normalize logs to rows with specific columns
+  const rows = logs.map((l) => ({
+    Username: l.username || l.user || 'Unknown',
+    Details: l.details || l.action || '',
+    'Log Date': l.log_date || '',
+    'Log Time': l.log_time || '',
+  }));
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+
+  const columnWidths = Object.keys(rows[0] || {}).map(key => ({ wch: Math.max(key.length, ...rows.map((r: any) => String((r as any)[key] || '').length)) + 2 }));
+  worksheet['!cols'] = columnWidths;
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Logs');
+  XLSX.writeFile(workbook, `${filename}.xlsx`);
+};
