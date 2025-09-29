@@ -428,13 +428,24 @@ export function DashboardView({
 
   /**
    * Validates that the entered value corresponds to a valid item ID
+   * Supports both direct item IDs and barcode format (ITM001, ITM002, etc.)
    * @returns The found product or null if not found
    */
   const validateItemId = (value: string): Product | null => {
     if (!value.trim()) return null;
     
-    // Search for product by exact ID match only
-    return products.find((p) => p.id === value.trim()) || null;
+    let searchId = value.trim();
+    
+    // Check if it's a barcode format (ITM001, ITM002, etc.)
+    const barcodeMatch = value.trim().match(/^ITM(\d+)$/i);
+    if (barcodeMatch) {
+      // Extract the number from ITM001 -> 1, ITM002 -> 2, etc.
+      const itemNumber = parseInt(barcodeMatch[1], 10);
+      searchId = itemNumber.toString();
+    }
+    
+    // Search for product by exact ID match
+    return products.find((p) => p.id === searchId) || null;
   }
 
   // Expose refresh function to parent component
@@ -463,42 +474,39 @@ export function DashboardView({
       
       // Handle Enter key (typical end of barcode scan)
       if (event.key === 'Enter' && barcodeBuffer.length > 0) {
-        // Only process if not in an input field
-        if (document.activeElement?.tagName !== 'INPUT' && 
-            document.activeElement?.tagName !== 'TEXTAREA') {
-          
-          // Set the barcode input and trigger scan detection
-          setBarcodeInput(barcodeBuffer);
-          setIsScanning(true);
-          setIsBarcodeScanned(true);
-          
-          // Process the barcode after a short delay to ensure UI updates
-          setTimeout(() => {
-            const foundProduct = validateItemId(barcodeBuffer);
-            
-            if (foundProduct) {
-              onAddToCart(foundProduct);
-              toast({
-                title: "Item Added",
-                description: `${foundProduct.name} has been added to your toolbox`,
-              });
-            } else {
-              toast({
-                title: "Item Not Found",
-                description: `No item found with ID: ${barcodeBuffer}`,
-                variant: "destructive",
-              });
-            }
-            
-            // Reset state
-            setBarcodeInput("");
-            setIsScanning(false);
-            setIsBarcodeScanned(false);
-          }, 50);
-        }
+        // Process barcode scan regardless of focus
+        // Set the barcode input and trigger scan detection
+        setBarcodeInput(barcodeBuffer);
+        setIsScanning(true);
+        setIsBarcodeScanned(true);
         
-        // Reset buffer regardless
+        // Process the barcode after a short delay to ensure UI updates
+        setTimeout(() => {
+          const foundProduct = validateItemId(barcodeBuffer);
+          
+          if (foundProduct) {
+            onAddToCart(foundProduct);
+            toast({
+              title: "Item Added",
+              description: `${foundProduct.name} has been added to your toolbox`,
+            });
+          } else {
+            toast({
+              title: "Item Not Found",
+              description: `No item found with ID: ${barcodeBuffer}`,
+              variant: "destructive",
+            });
+          }
+          
+          // Reset state
+          setBarcodeInput("");
+          setIsScanning(false);
+          setIsBarcodeScanned(false);
+        }, 50);
+        
+        // Reset buffer and prevent default Enter behavior
         barcodeBuffer = "";
+        event.preventDefault();
         return;
       }
       
@@ -651,7 +659,7 @@ export function DashboardView({
     } else if (barcodeInput.trim()) {
       return "Manual entry detected. Press Enter or click Add to add this item.";
     } else {
-      return "Ready to scan item barcode (auto-adds) or enter item ID manually.";
+      return "Ready to scan barcode (ITM001, ITM002, etc.) or enter item ID manually.";
     }
   }
 
@@ -1138,7 +1146,7 @@ export function DashboardView({
                 isScanning ? "text-green-500" : "text-slate-400"
               }`} />
               <Input
-                placeholder="Scan item barcode or enter ID..."
+                placeholder="Scan barcode (ITM001, ITM002...) or enter item ID..."
                 value={barcodeInput}
                 onChange={handleBarcodeInputChange}
                 onKeyPress={handleBarcodeKeyPress}
