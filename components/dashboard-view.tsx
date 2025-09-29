@@ -433,22 +433,28 @@ export function DashboardView({
    */
   const validateItemId = (value: string): Product | null => {
     if (!value.trim()) return null;
-    
+
     let searchId = value.trim();
-    
-    // Check if it's a barcode format (ITM001, ITM002, etc.)
+    console.log("[validateItemId] Input:", value, "-> initial searchId:", searchId);
+
+    // Check if it's a barcode format (ITM followed by digits)
     const barcodeMatch = value.trim().match(/^ITM(\d+)$/i);
     if (barcodeMatch) {
-      // Extract the number from ITM001 -> 1, ITM002 -> 2, etc.
+      // Convert barcode digits to number (removes leading zeros)
+      // ITM001 -> "001" -> 1 -> "1"
+      // ITM010 -> "010" -> 10 -> "10"
+      // ITM100 -> "100" -> 100 -> "100"
       const itemNumber = parseInt(barcodeMatch[1], 10);
       searchId = itemNumber.toString();
+      console.log("[validateItemId] Barcode detected:", value, "-> extracted:", barcodeMatch[1], "-> parsed:", itemNumber, "-> searchId:", searchId);
     }
-    
-    // Search for product by exact ID match
-    return products.find((p) => p.id === searchId) || null;
-  }
 
-  // Expose refresh function to parent component
+    // Search for product by exact ID match
+    const foundProduct = products.find((p) => p.id === searchId);
+    console.log("[validateItemId] Searching for item ID:", searchId, "-> found:", foundProduct ? foundProduct.name : "NOT FOUND");
+
+    return foundProduct || null;
+  }
   useEffect(() => {
     if (onRefreshData) {
       onRefreshData(handleRefreshData)
@@ -474,6 +480,7 @@ export function DashboardView({
       
       // Handle Enter key (typical end of barcode scan)
       if (event.key === 'Enter' && barcodeBuffer.length > 0) {
+        console.log("[Global Scanner] Enter pressed, barcodeBuffer:", barcodeBuffer);
         // Process barcode scan regardless of focus
         // Set the barcode input and trigger scan detection
         setBarcodeInput(barcodeBuffer);
@@ -485,12 +492,14 @@ export function DashboardView({
           const foundProduct = validateItemId(barcodeBuffer);
           
           if (foundProduct) {
+            console.log("[Global Scanner] Adding item:", foundProduct.name);
             onAddToCart(foundProduct);
             toast({
               title: "Item Added",
               description: `${foundProduct.name} has been added to your toolbox`,
             });
           } else {
+            console.log("[Global Scanner] Item not found for:", barcodeBuffer);
             toast({
               title: "Item Not Found",
               description: `No item found with ID: ${barcodeBuffer}`,
@@ -502,7 +511,7 @@ export function DashboardView({
           setBarcodeInput("");
           setIsScanning(false);
           setIsBarcodeScanned(false);
-        }, 50);
+        }, 1000);
         
         // Reset buffer and prevent default Enter behavior
         barcodeBuffer = "";
@@ -701,6 +710,7 @@ export function DashboardView({
    * Called either manually by button press or automatically from scanner
    */
   const handleBarcodeSubmit = () => {
+    console.log("[Manual Submit] Submitting barcodeInput:", barcodeInput);
     setIsScanning(false);
     
     if (!barcodeInput.trim()) {
@@ -716,6 +726,7 @@ export function DashboardView({
     const foundProduct = validateItemId(barcodeInput);
 
     if (foundProduct) {
+      console.log("[Manual Submit] Adding item:", foundProduct.name);
       onAddToCart(foundProduct)
       setBarcodeInput("")
       setIsBarcodeScanned(false)
