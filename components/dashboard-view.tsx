@@ -1,84 +1,51 @@
 import type React from "react"
-import { useState, useMemo, useEffect } from "react"
-import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw } from "lucide-react"
+import { useState, useMemo, useEffect, useRef } from "react"
+import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw, ZapIcon, Settings, Wifi, WifiOff, Download, FileText, FileSpreadsheet, Code } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-config"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { exportToCSV, exportToXLSX, exportToJSON, prepareExportData, exportLogsToXLSX } from "@/lib/export-utils"
 import type { Product } from "@/app/page"
-
-
-const generateMockProducts = (): Product[] => {
-  const baseProducts = [
-    {
-      name: "Lorem ipsum dolor sit amet, consectetur adipiscing elit",
-      brand: "Praesent",
-      itemType: "sit amet ornare",
-      location: "Praesent est odio",
-    },
-    {
-      name: "Sed do eiusmod tempor incididunt ut labore",
-      brand: "Ut enim",
-      itemType: "sit amet ornare",
-      location: "Interdum et malesuada fames",
-    },
-    {
-      name: "Ut enim ad minim veniam quis nostrud",
-      brand: "Exercitation",
-      itemType: "Interdum et malesuada fames",
-      location: "Interdum et malesuada fames",
-    },
-    {
-      name: "Duis aute irure dolor in reprehenderit",
-      brand: "Voluptate",
-      itemType: "sit amet ornare",
-      location: "Praesent est odio",
-    },
-    {
-      name: "Excepteur sint occaecat cupidatat non proident",
-      brand: "Sunt in culpa",
-      itemType: "Interdum et malesuada fames",
-      location: "Interdum et malesuada fames",
-    },
-  ]
-
-  const products: Product[] = []
-  const statuses: Product["status"][] = ["in-stock", "low-stock", "out-of-stock"]
-
-  for (let i = 0; i < 200; i++) {
-    const baseProduct = baseProducts[i % baseProducts.length]
-    const status = statuses[i % statuses.length]
-
-    products.push({
-      id: (i + 1).toString(),
-      name: `${baseProduct.name} - Item ${i + 1}`,
-      brand: baseProduct.brand,
-      itemType: baseProduct.itemType,
-      location: baseProduct.location,
-      balance: status === "out-of-stock" ? 0 : Math.floor(Math.random() * 20) + 1,
-      status,
-    })
-  }
-
-  return products
-}
 
 interface DashboardViewProps {
   onAddToCart: (product: Product, quantity?: number) => void
   onViewItem: (product: Product) => void
   searchQuery?: string
   onRefreshData?: (refreshFunction: () => void) => void // Callback to expose refresh function
+  apiUrl?: string
+  onApiUrlChange?: (url: string) => void
+  isConnected?: boolean
 }
 
-export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRefreshData }: DashboardViewProps) {
+export function DashboardView({ 
+  onAddToCart, 
+  onViewItem, 
+  searchQuery = "", 
+  onRefreshData,
+  apiUrl = "",
+  onApiUrlChange,
+  isConnected = false
+}: DashboardViewProps) {
   const [products, setProducts] = useState<Product[]>([])
   const [isLoadingData, setIsLoadingData] = useState(true)
-  const [dataSource, setDataSource] = useState<"api" | "mock">("mock")
+  const [dataSource, setDataSource] = useState<"api" | "cached">("cached")
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [tempApiUrl, setTempApiUrl] = useState(apiUrl)
+
+  // Keep tempApiUrl in sync with apiUrl prop
+  useEffect(() => {
+    setTempApiUrl(apiUrl)
+  }, [apiUrl])
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
@@ -89,9 +56,78 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
   const [barcodeInput, setBarcodeInput] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [isScanning, setIsScanning] = useState(false)
+  const [isBarcodeScanned, setIsBarcodeScanned] = useState(false)
+  const [lastKeyTime, setLastKeyTime] = useState<number>(0)
+  const [isExporting, setIsExporting] = useState(false)
+  const [logs, setLogs] = useState<any[]>([])
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false)
+  const [logsError, setLogsError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState("api")
+  const [hasLoadedLogs, setHasLoadedLogs] = useState(false)
   const { toast } = useToast()
 
   const ITEMS_PER_PAGE = 50
+  const BARCODE_SPEED_THRESHOLD = 100 // ms between characters to detect barcode scanner vs manual typing
+
+  // Check if localStorage is available (not server-side rendering)
+  const isLocalStorageAvailable = () => {
+    if (typeof window === 'undefined') return false;
+    try {
+      // Test if localStorage is accessible
+      const testKey = '__test__';
+      localStorage.setItem(testKey, testKey);
+      localStorage.removeItem(testKey);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Function to save products to localStorage
+  const saveProductsToLocalStorage = (products: Product[]) => {
+    if (!isLocalStorageAvailable()) {
+      console.log("[v0] localStorage not available, skipping save");
+      return;
+    }
+    
+    try {
+      localStorage.setItem('cached-products', JSON.stringify(products));
+      localStorage.setItem('cached-products-timestamp', new Date().toISOString());
+      console.log("[v0] Saved products to local storage:", products.length);
+    } catch (error) {
+      console.error("[v0] Error saving products to local storage:", error);
+    }
+  };
+
+  // Function to load products from localStorage
+  const loadProductsFromLocalStorage = (): { products: Product[] | null, timestamp: Date | null } => {
+    if (!isLocalStorageAvailable()) {
+      console.log("[v0] localStorage not available, cannot load products");
+      return { products: null, timestamp: null };
+    }
+    
+    try {
+      const productsJson = localStorage.getItem('cached-products');
+      const timestampStr = localStorage.getItem('cached-products-timestamp');
+      
+      if (!productsJson) {
+        console.log("[v0] No products found in local storage");
+        return { products: null, timestamp: null };
+      }
+      
+      const products = JSON.parse(productsJson) as Product[];
+      const timestamp = timestampStr ? new Date(timestampStr) : null;
+      
+      console.log("[v0] Loaded products from local storage:", products.length);
+      console.log("[v0] Local data timestamp:", timestamp);
+      
+      return { products, timestamp };
+    } catch (error) {
+      console.error("[v0] Error loading products from local storage:", error);
+      return { products: null, timestamp: null };
+    }
+  };
 
   const fetchProductsFromAPI = async () => {
     try {
@@ -133,23 +169,46 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
       setProducts(transformedProducts)
       setDataSource("api")
       setLastFetchTime(new Date())
+      
+      // Save the API data to localStorage for offline use
+      saveProductsToLocalStorage(transformedProducts);
 
       toast({
         title: "Data Loaded",
         description: `Successfully loaded ${transformedProducts.length} items from API`,
       })
     } catch (error) {
-      console.error("[v0] Failed to fetch from API, falling back to mock data:", error)
-
-      const mockProducts = generateMockProducts()
-      setProducts(mockProducts)
-      setDataSource("mock")
-
-      toast({
-        title: "Using Mock Data",
-        description: "API unavailable, using sample data for demonstration",
-        variant: "destructive",
-      })
+      console.error("[v0] Failed to fetch from API, trying to use cached data:", error)
+      
+      // Try to get data from localStorage first
+      const { products: cachedProducts, timestamp } = loadProductsFromLocalStorage();
+      
+      if (cachedProducts && cachedProducts.length > 0) {
+        // Use cached API data if available
+        setProducts(cachedProducts)
+        setDataSource("cached") // Mark as cached API data
+        setLastFetchTime(timestamp)
+        
+        const timeDiff = timestamp ? Math.round((new Date().getTime() - timestamp.getTime()) / (1000 * 60 * 60)) : null;
+        const timeMsg = timeDiff ? ` (from ${timeDiff} hour${timeDiff === 1 ? '' : 's'} ago)` : '';
+        
+        toast({
+          title: "Using Cached API Data",
+          description: `API unavailable. Using previously downloaded data${timeMsg}`,
+          variant: "default",
+        })
+      } else {
+        // No cached data available and API is down - show empty state
+        console.error("[v0] No cached data available and API is down");
+        setProducts([])
+        setDataSource("cached")
+        
+        toast({
+          title: "No Data Available",
+          description: "API unavailable and no previously downloaded data found. Please restore connection to load data.",
+          variant: "destructive",
+        })
+      }
     } finally {
       setIsLoadingData(false)
     }
@@ -158,10 +217,225 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
   const handleRefreshData = () => {
     fetchProductsFromAPI()
   }
+  
+  const handleSaveSettings = () => {
+    if (onApiUrlChange) {
+      onApiUrlChange(tempApiUrl)
+    }
+    setIsSettingsOpen(false)
+    // Refresh data after changing API URL
+    setTimeout(() => {
+      fetchProductsFromAPI()
+    }, 500)
+  }
+
+  // Export handlers
+  const handleExportCSV = async () => {
+    try {
+      setIsExporting(true)
+      const exportData = prepareExportData(
+        products, 
+        apiUrl, 
+        isConnected, 
+        lastFetchTime?.toISOString() || null
+      )
+      
+      const filename = `toolbox-inventory-${new Date().toISOString().split('T')[0]}`
+      exportToCSV(exportData, { filename, includeMetadata: true })
+      
+      toast({
+        title: "Export Successful",
+        description: `Inventory data exported to ${filename}.csv`,
+      })
+    } catch (error) {
+      console.error('Export to CSV failed:', error)
+      toast({
+        title: "Export Failed",
+        description: "Failed to export data to CSV. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleExportXLSX = async () => {
+    try {
+      setIsExporting(true)
+      const exportData = prepareExportData(
+        products, 
+        apiUrl, 
+        isConnected, 
+        lastFetchTime?.toISOString() || null
+      )
+      
+      const filename = `toolbox-inventory-${new Date().toISOString().split('T')[0]}`
+      exportToXLSX(exportData, { filename, includeMetadata: true })
+      
+      toast({
+        title: "Export Successful",
+        description: `Inventory data exported to ${filename}.xlsx`,
+      })
+    } catch (error) {
+      console.error('Export to XLSX failed:', error)
+      toast({
+        title: "Export Failed",
+        description: "Failed to export data to Excel. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleExportJSON = async () => {
+    try {
+      setIsExporting(true)
+      const exportData = prepareExportData(
+        products, 
+        apiUrl, 
+        isConnected, 
+        lastFetchTime?.toISOString() || null
+      )
+      
+      const filename = `toolbox-inventory-${new Date().toISOString().split('T')[0]}`
+      exportToJSON(exportData, { filename, includeMetadata: true })
+      
+      toast({
+        title: "Export Successful",
+        description: `Inventory data exported to ${filename}.json`,
+      })
+    } catch (error) {
+      console.error('Export to JSON failed:', error)
+      toast({
+        title: "Export Failed",
+        description: "Failed to export data to JSON. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  // Logs fetching and export
+  const fetchLogsFromAPI = async () => {
+    try {
+      setIsLoadingLogs(true)
+      setLogsError(null)
+      
+      const resp = await apiService.fetchTransactions()
+
+      // TransactionResponse shape is { data: any[], ... }
+      const fetched = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.data) ? resp.data : [])
+
+      // Normalize fields: Username, details, log_date, log_time
+      const normalized = fetched.map((entry: any) => {
+        // Try common timestamp fields
+        const ts = entry.timestamp || entry.created_at || entry.log_timestamp || entry.datetime || entry.date
+        let logDate = ''
+        let logTime = ''
+        if (ts) {
+          try {
+            const d = new Date(ts)
+            if (!isNaN(d.getTime())) {
+              logDate = d.toLocaleDateString()
+              logTime = d.toLocaleTimeString()
+            }
+          } catch (e) {
+            // fallthrough
+          }
+        }
+
+        // Better details formatting - try to extract meaningful text from JSON
+        let details = entry.details || entry.action || entry.message || 'No details'
+        if (details === 'No details' && entry) {
+          // If it's a POS checkout, format it nicely
+          if (entry.action && entry.action.includes('POS Checkout')) {
+            details = entry.action
+          } else {
+            // Otherwise, show a shortened JSON
+            const jsonStr = JSON.stringify(entry)
+            details = jsonStr.length > 100 ? jsonStr.substring(0, 100) + '...' : jsonStr
+          }
+        }
+
+        return {
+          username: entry.username || entry.user || entry.user_name || entry.employee || 'Unknown',
+          details: details,
+          log_date: logDate,
+          log_time: logTime,
+          raw: entry,
+        }
+      })
+
+      setLogs(normalized)
+      setHasLoadedLogs(true)
+    } catch (error) {
+      console.error('[v0] Failed to fetch logs:', error)
+      setLogsError(String(error))
+      toast({ title: 'Failed to load logs', description: String(error), variant: 'destructive' })
+    } finally {
+      setIsLoadingLogs(false)
+    }
+  }
+
+  // Auto-load logs when Logs tab is opened
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+    if (value === 'logs' && !hasLoadedLogs && !isLoadingLogs) {
+      fetchLogsFromAPI()
+    }
+  }
+
+  const handleExportLogsXLSX = async () => {
+    try {
+      if (!logs || logs.length === 0) {
+        toast({ title: 'No Logs', description: 'No logs available to export', variant: 'destructive' })
+        return
+      }
+
+      setIsExporting(true)
+      const filename = `toolbox-logs-${new Date().toISOString().split('T')[0]}`
+      exportLogsToXLSX(logs, { filename })
+
+      toast({ title: 'Export Successful', description: `Logs exported to ${filename}.xlsx` })
+    } catch (error) {
+      console.error('Export logs failed:', error)
+      toast({ title: 'Export Failed', description: 'Failed to export logs to Excel', variant: 'destructive' })
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   useEffect(() => {
-    fetchProductsFromAPI()
+    // Try to load cached data immediately while we wait for API response
+    const { products: cachedProducts, timestamp } = loadProductsFromLocalStorage();
+    
+    if (cachedProducts && cachedProducts.length > 0) {
+      console.log("[v0] Using cached data while fetching from API");
+      setProducts(cachedProducts);
+      setDataSource("cached");
+      setLastFetchTime(timestamp);
+      setIsLoadingData(false); // Show cached data immediately
+      
+      // Then fetch fresh data from API
+      fetchProductsFromAPI();
+    } else {
+      // No cached data, just fetch from API
+      fetchProductsFromAPI();
+    }
   }, [])
+
+  /**
+   * Validates that the entered value corresponds to a valid item ID
+   * @returns The found product or null if not found
+   */
+  const validateItemId = (value: string): Product | null => {
+    if (!value.trim()) return null;
+    
+    // Search for product by exact ID match only
+    return products.find((p) => p.id === value.trim()) || null;
+  }
 
   // Expose refresh function to parent component
   useEffect(() => {
@@ -169,11 +443,96 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
       onRefreshData(handleRefreshData)
     }
   }, [onRefreshData])
+  
+  // Global barcode scanner detection
+  useEffect(() => {
+    let barcodeBuffer = "";
+    
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      const currentTime = Date.now();
+      
+      // If this is likely from a barcode scanner based on typing speed
+      const isLikelyScanner = currentTime - lastKeyTime < BARCODE_SPEED_THRESHOLD;
+      setLastKeyTime(currentTime);
+      
+      // If there's a long pause, reset the buffer (manual typing)
+      if (!isLikelyScanner && barcodeBuffer.length > 0) {
+        barcodeBuffer = "";
+        setIsScanning(false);
+      }
+      
+      // Handle Enter key (typical end of barcode scan)
+      if (event.key === 'Enter' && barcodeBuffer.length > 0) {
+        // Only process if not in an input field
+        if (document.activeElement?.tagName !== 'INPUT' && 
+            document.activeElement?.tagName !== 'TEXTAREA') {
+          
+          // Set the barcode input and trigger scan detection
+          setBarcodeInput(barcodeBuffer);
+          setIsScanning(true);
+          setIsBarcodeScanned(true);
+          
+          // Process the barcode after a short delay to ensure UI updates
+          setTimeout(() => {
+            const foundProduct = validateItemId(barcodeBuffer);
+            
+            if (foundProduct) {
+              onAddToCart(foundProduct);
+              toast({
+                title: "Item Added",
+                description: `${foundProduct.name} has been added to your toolbox`,
+              });
+            } else {
+              toast({
+                title: "Item Not Found",
+                description: `No item found with ID: ${barcodeBuffer}`,
+                variant: "destructive",
+              });
+            }
+            
+            // Reset state
+            setBarcodeInput("");
+            setIsScanning(false);
+            setIsBarcodeScanned(false);
+          }, 50);
+        }
+        
+        // Reset buffer regardless
+        barcodeBuffer = "";
+        return;
+      }
+      
+      // Only add printable characters to buffer
+      if (event.key.length === 1 && /[\w\d]/.test(event.key)) {
+        barcodeBuffer += event.key;
+        
+        if (isLikelyScanner) {
+          // Don't set scanning UI unless we have multiple chars (to avoid false positives)
+          if (barcodeBuffer.length > 1) {
+            setIsScanning(true);
+          }
+        }
+      }
+    };
+    
+    // Add global listener
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [lastKeyTime, onAddToCart, toast]);
 
   // Update local search when header search changes
   useEffect(() => {
     setLocalSearchQuery(searchQuery)
   }, [searchQuery])
+  
+  // Update tempApiUrl when apiUrl prop changes
+  useEffect(() => {
+    setTempApiUrl(apiUrl)
+  }, [apiUrl])
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -280,43 +639,121 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
         return "Unknown"
     }
   }
+  
+  /**
+   * Formats feedback messages for barcode scanning vs manual entry
+   */
+  const getScanFeedbackText = (): string => {
+    if (isScanning) {
+      return "Barcode scan detected! Processing item...";
+    } else if (isBarcodeScanned) {
+      return "Barcode scan processed! Item will be added automatically.";
+    } else if (barcodeInput.trim()) {
+      return "Manual entry detected. Press Enter or click Add to add this item.";
+    } else {
+      return "Ready to scan item barcode (auto-adds) or enter item ID manually.";
+    }
+  }
 
+  /**
+   * Detects whether input is from a barcode scanner or manual typing
+   * based on the timing between keystrokes
+   */
+  const detectScanMethod = (currentTime: number): boolean => {
+    // If time between keystrokes is less than threshold, likely a scanner
+    const isScanner = currentTime - lastKeyTime < BARCODE_SPEED_THRESHOLD;
+    setLastKeyTime(currentTime);
+    return isScanner;
+  }
+
+  /**
+   * Handles the barcode input change
+   * Detects if input is from scanner and acts accordingly
+   */
+  const handleBarcodeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setBarcodeInput(value);
+    
+    // Detect if this is likely from a scanner based on typing speed
+    const currentTime = Date.now();
+    const isLikelyScanner = detectScanMethod(currentTime);
+    
+    // Only set scanning indicator if the input is fast enough to be from a scanner
+    // and there are multiple characters
+    if (isLikelyScanner && value.length > 1) {
+      setIsScanning(true);
+      setIsBarcodeScanned(true);
+    } else {
+      setIsBarcodeScanned(false);
+    }
+  }
+
+  /**
+   * Handles the submission of a barcode/item ID
+   * Called either manually by button press or automatically from scanner
+   */
   const handleBarcodeSubmit = () => {
+    setIsScanning(false);
+    
     if (!barcodeInput.trim()) {
       toast({
-        title: "Invalid Barcode",
-        description: "Please enter a valid barcode",
+        title: "Invalid Item ID",
+        description: "Please enter a valid item ID or scan a barcode",
         variant: "destructive",
       })
       return
     }
 
-    // Mock barcode lookup - in a real app this would query an API
-    const foundProduct = products.find(
-      (p) => p.id === barcodeInput || p.name.toLowerCase().includes(barcodeInput.toLowerCase()),
-    )
+    // Validate the item ID
+    const foundProduct = validateItemId(barcodeInput);
 
     if (foundProduct) {
       onAddToCart(foundProduct)
       setBarcodeInput("")
+      setIsBarcodeScanned(false)
       toast({
         title: "Item Added",
         description: `${foundProduct.name} has been added to your toolbox`,
       })
     } else {
       toast({
-        title: "Product Not Found",
-        description: "No product found with that barcode",
+        title: "Item Not Found",
+        description: `No item found with ID: ${barcodeInput}`,
         variant: "destructive",
       })
     }
   }
 
+  /**
+   * Handles key presses in the barcode input field
+   * Auto-submits on Enter key
+   */
   const handleBarcodeKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleBarcodeSubmit()
+      e.preventDefault()
     }
   }
+  
+  /**
+   * Effect to automatically submit when a barcode is scanned
+   * Only triggers when input is determined to be from a scanner
+   */
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
+    if (isScanning && isBarcodeScanned && barcodeInput.trim()) {
+      // Short delay to ensure complete barcode is captured
+      timer = setTimeout(() => {
+        console.log("[Dashboard] Auto-adding item from barcode scan:", barcodeInput);
+        handleBarcodeSubmit();
+      }, 50);
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [barcodeInput, isScanning, isBarcodeScanned]);
 
   if (isLoadingData) {
     return (
@@ -324,6 +761,32 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
         <div className="text-center space-y-4">
           <div className="w-12 h-12 border-4 border-accent/20 border-t-accent rounded-full animate-spin mx-auto"></div>
           <p className="text-slate-600 dark:text-slate-400">Loading products...</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // Show empty state if no products are available
+  if (!isLoadingData && (!products || products.length === 0)) {
+    return (
+      <div className="flex h-screen bg-slate-50 dark:bg-slate-900 items-center justify-center">
+        <div className="text-center space-y-4 max-w-md p-6 bg-white dark:bg-slate-800 rounded-lg shadow-lg">
+          <div className="w-16 h-16 mx-auto text-slate-400 dark:text-slate-500">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 12H4M8 16l-4-4 4-4M16 16l4-4-4-4" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">No Data Available</h3>
+          <p className="text-slate-600 dark:text-slate-400">
+            There are no items available. Please check your API connection and try again.
+          </p>
+          <Button 
+            onClick={handleRefreshData} 
+            className="mt-4"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry Connection
+          </Button>
         </div>
       </div>
     )
@@ -338,20 +801,265 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
             <Filter className="w-4 h-4" />
             <span className="font-medium">Filters</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleRefreshData} disabled={isLoadingData} className="p-1">
-            <RefreshCw className={`w-4 h-4 ${isLoadingData ? "animate-spin" : ""}`} />
-          </Button>
+          <div className="flex space-x-1">
+            <Button variant="ghost" size="sm" onClick={() => setIsSettingsOpen(true)} className="p-1">
+              <Settings className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleRefreshData} disabled={isLoadingData} className="p-1">
+              <RefreshCw className={`w-4 h-4 ${isLoadingData ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         </div>
 
-        <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+        <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 bg-slate-50 dark:bg-slate-700/30 p-2 rounded-md">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-1">
+              {isConnected ? (
+                <Wifi className="w-3 h-3 text-green-500" />
+              ) : (
+                <WifiOff className="w-3 h-3 text-orange-500" />
+              )}
+              <span>API Status:</span>
+            </div>
+            <Badge 
+              variant={isConnected ? "default" : "outline"} 
+              className="text-xs"
+            >
+              {isConnected ? "Connected" : "Disconnected"}
+            </Badge>
+          </div>
           <div className="flex items-center justify-between">
             <span>Data Source:</span>
-            <Badge variant={dataSource === "api" ? "default" : "secondary"} className="text-xs">
-              {dataSource === "api" ? "API" : "Mock"}
+            <Badge 
+              variant={dataSource === "api" ? "default" : "outline"} 
+              className="text-xs"
+            >
+              {dataSource === "api" ? "API" : "Cached API"}
             </Badge>
           </div>
           {lastFetchTime && <div>Last updated: {lastFetchTime.toLocaleTimeString()}</div>}
         </div>
+        
+        {/* Settings Dialog with Tabs */}
+        <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+          <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                <Settings className="w-5 h-5" />
+                <span>Dashboard Settings</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <Tabs defaultValue="api" className="w-full" value={activeTab} onValueChange={handleTabChange}>
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="api">API Configuration</TabsTrigger>
+                  <TabsTrigger value="export">Export Data</TabsTrigger>
+                  <TabsTrigger value="logs">Logs</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="api" className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="dashboard-api-url">API Base URL</Label>
+                    <Input
+                      id="dashboard-api-url"
+                      placeholder="http://192.168.68.106:3001"
+                      value={tempApiUrl}
+                      onChange={(e) => setTempApiUrl(e.target.value)}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Enter the base URL for your API server. Changes will take effect after saving.
+                    </p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button onClick={handleSaveSettings} className="flex-1">
+                      Save Settings
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsSettingsOpen(false)} className="flex-1">
+                      Cancel
+                    </Button>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="export" className="space-y-4 mt-4">
+                  <div className="space-y-4">
+                    <div className="text-sm text-muted-foreground">
+                      Export your inventory data in different formats. All exports include {products.length} items.
+                      <br />
+                      <span className="text-xs">
+                        Data source: {dataSource === 'api' ? 'Live API' : 'Cached'} 
+                        {lastFetchTime && ` (last updated: ${lastFetchTime.toLocaleString()})`}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 gap-3">
+                      <Card className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <FileText className="w-8 h-8 text-green-600" />
+                            <div>
+                              <h4 className="font-medium">CSV Format</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Comma-separated values, ideal for spreadsheets
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            onClick={handleExportCSV} 
+                            disabled={isExporting || products.length === 0}
+                            size="sm"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Export CSV
+                          </Button>
+                        </div>
+                      </Card>
+                      
+                      <Card className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <FileSpreadsheet className="w-8 h-8 text-blue-600" />
+                            <div>
+                              <h4 className="font-medium">Excel Format</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Excel workbook with multiple sheets and summaries
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            onClick={handleExportXLSX} 
+                            disabled={isExporting || products.length === 0}
+                            size="sm"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Export XLSX
+                          </Button>
+                        </div>
+                      </Card>
+                      
+                      <Card className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <Code className="w-8 h-8 text-orange-600" />
+                            <div>
+                              <h4 className="font-medium">JSON Format</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Structured data format for developers and APIs
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            onClick={handleExportJSON} 
+                            disabled={isExporting || products.length === 0}
+                            size="sm"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Export JSON
+                          </Button>
+                        </div>
+                      </Card>
+                    </div>
+                    
+                    {products.length === 0 && (
+                      <div className="text-center p-4 text-muted-foreground">
+                        <p>No data available to export. Please load inventory data first.</p>
+                      </div>
+                    )}
+                    
+                    {isExporting && (
+                      <div className="text-center p-4">
+                        <Progress value={undefined} className="w-full h-2" />
+                        <p className="text-sm text-muted-foreground mt-2">Preparing export...</p>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="logs" className="space-y-4 mt-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">Employee Logs</h4>
+                        <p className="text-sm text-muted-foreground">Recent employee activity logs loaded automatically from the API.</p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button onClick={fetchLogsFromAPI} size="sm" disabled={isLoadingLogs} variant="outline">
+                          <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingLogs ? 'animate-spin' : ''}`} />
+                          Refresh
+                        </Button>
+                        <Button onClick={handleExportLogsXLSX} size="sm" disabled={isExporting || logs.length === 0}>
+                          <Download className="w-4 h-4 mr-2" />
+                          Export XLSX
+                        </Button>
+                      </div>
+                    </div>
+
+                    {isLoadingLogs && (
+                      <div className="flex items-center justify-center p-8 bg-slate-800/30 rounded-md border border-slate-700">
+                        <div className="text-center">
+                          <div className="w-8 h-8 border-2 border-slate-400 border-t-slate-200 rounded-full animate-spin mx-auto mb-3"></div>
+                          <p className="text-sm text-slate-400">Loading employee logs...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {logsError && (
+                      <div className="p-4 text-sm text-destructive">Error loading logs: {logsError}</div>
+                    )}
+
+                    {!isLoadingLogs && logs.length > 0 && (
+                      <div className="overflow-hidden bg-slate-900 rounded-md border border-slate-600">
+                        <div className="overflow-auto max-h-96">
+                          <table className="w-full text-sm table-fixed">
+                            <thead>
+                              <tr>
+                                <th className="p-2 text-left bg-slate-800 text-slate-100 sticky top-0 z-10 border-b border-slate-600 font-medium w-24">Username</th>
+                                <th className="p-2 text-left bg-slate-800 text-slate-100 sticky top-0 z-10 border-b border-slate-600 font-medium">Details</th>
+                                <th className="p-2 text-left bg-slate-800 text-slate-100 sticky top-0 z-10 border-b border-slate-600 font-medium w-24">Log Date</th>
+                                <th className="p-2 text-left bg-slate-800 text-slate-100 sticky top-0 z-10 border-b border-slate-600 font-medium w-20">Log Time</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {logs.map((l, idx) => (
+                                <tr key={idx} className={`${idx % 2 === 0 ? 'bg-slate-800/50' : 'bg-slate-700/50'} text-slate-100 hover:bg-slate-600/30 transition-colors`}>
+                                  <td className="p-2 align-top border-b border-slate-700/50 w-24">
+                                    <div className="break-words font-medium text-slate-200 text-xs">
+                                      {l.username}
+                                    </div>
+                                  </td>
+                                  <td className="p-2 align-top border-b border-slate-700/50">
+                                    <div className="break-words text-slate-300 text-xs leading-relaxed">
+                                      {l.details}
+                                    </div>
+                                  </td>
+                                  <td className="p-2 align-top border-b border-slate-700/50 w-24">
+                                    <div className="text-slate-200 text-xs whitespace-nowrap">
+                                      {l.log_date}
+                                    </div>
+                                  </td>
+                                  <td className="p-2 align-top border-b border-slate-700/50 w-20">
+                                    <div className="text-slate-200 text-xs whitespace-nowrap">
+                                      {l.log_time}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {!isLoadingLogs && logs.length === 0 && !logsError && (
+                      <div className="p-4 text-sm text-muted-foreground">No logs loaded. Click Fetch Logs to retrieve entries from the API.</div>
+                    )}
+
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Categories */}
         <div className="space-y-3">
@@ -404,27 +1112,67 @@ export function DashboardView({ onAddToCart, onViewItem, searchQuery = "", onRef
 
         {/* Barcode Scanner */}
         <div className="space-y-3">
-          <h3 className="font-medium text-slate-900 dark:text-slate-100">Barcode Scanner</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium text-slate-900 dark:text-slate-100">Item Scanner</h3>
+            {isScanning && (
+              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800 animate-pulse">
+                Scanning...
+              </Badge>
+            )}
+          </div>
+          
+          <div className="text-xs bg-slate-100 dark:bg-slate-700 p-2 rounded-md text-slate-600 dark:text-slate-300 space-y-1">
+            <div className="flex items-center">
+              <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
+              <span><strong>Barcode scan:</strong> Items added automatically</span>
+            </div>
+            <div className="flex items-center">
+              <span className="w-3 h-3 bg-teal-500 rounded-full mr-2"></span>
+              <span><strong>Manual entry:</strong> Requires button press</span>
+            </div>
+          </div>
+          
           <div className="space-y-2">
             <div className="relative">
-              <Scan className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <Scan className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${
+                isScanning ? "text-green-500" : "text-slate-400"
+              }`} />
               <Input
-                placeholder="Scan barcode..."
+                placeholder="Scan item barcode or enter ID..."
                 value={barcodeInput}
-                onChange={(e) => setBarcodeInput(e.target.value)}
+                onChange={handleBarcodeInputChange}
                 onKeyPress={handleBarcodeKeyPress}
-                className="pl-10"
+                className={`pl-10 ${
+                  isScanning 
+                    ? "border-green-500 ring-1 ring-green-500 dark:border-green-500" 
+                    : ""
+                }`}
               />
+              {isScanning && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
             </div>
+            
+            {/* Only show button if not scanning (for manual entry) */}
             <Button
               size="sm"
-              className="w-full bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600"
+              className={`w-full transition-all duration-200 ${
+                isBarcodeScanned
+                  ? "bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
+                  : "bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600"
+              }`}
               onClick={handleBarcodeSubmit}
               disabled={!barcodeInput.trim()}
             >
               <BarChart3 className="w-4 h-4 mr-2" />
               Add to Toolbox
             </Button>
+            
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              {getScanFeedbackText()}
+            </div>
           </div>
         </div>
       </div>

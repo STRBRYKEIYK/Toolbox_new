@@ -140,6 +140,9 @@ export default function HomePage() {
             onViewItem={viewItemDetail} 
             searchQuery={headerSearchQuery}
             onRefreshData={setDashboardRefresh}
+            apiUrl={apiUrl}
+            onApiUrlChange={handleApiUrlChange}
+            isConnected={isApiConnected}
           />
         )}
 
