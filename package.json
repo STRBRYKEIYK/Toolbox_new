@@ -1,7 +1,7 @@
 {
   "name": "toolbox-inventory-app",
   "version": "1.0.0",
-  "description": "Desktop inventory management application for toolbox items",
+  "description": "Web-based inventory management application for toolbox items",
   "author": "OpenWilheilmer <Keidesu02@gmail.com>",
   "company": "JJC Engineering Works and General Services",
   "private": true,
@@ -9,72 +9,7 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start",
-    "electron-dev": "concurrently \"cross-env BROWSER=none npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron-build": "npm run build && electron-builder --config electron-builder.config.js",
-    "build-win": "npm run build && electron-builder --config electron-builder.config.js --win --publish never",
-    "build-mac": "npm run build && electron-builder --config electron-builder.config.js --mac --publish never", 
-    "build-linux": "npm run build && electron-builder --config electron-builder.config.js --linux --publish never",
-    "dist": "npm run build && electron-builder --config electron-builder.config.js --publish never",
-    "pack": "npm run build && electron-builder --config electron-builder.config.js --dir"
-  },
-  "main": "main.js",
-  "build": {
-    "appId": "com.jjcengineering.toolbox.inventory",
-    "productName": "Toolbox Inventory Manager",
-    "copyright": "Copyright © 2025 JJC Engineering Works and General Services",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "out/**/*",
-      "main.js",
-      "preload.js",
-      "package.json"
-    ],
-    "extraMetadata": {
-      "main": "main.js"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Toolbox Inventory Manager",
-      "displayLanguageSelector": false,
-      "installerIcon": "public/placeholder-logo.png",
-      "uninstallerIcon": "public/placeholder-logo.png",
-      "license": false,
-      "runAfterFinish": true,
-      "deleteAppDataOnUninstall": false,
-      "warningsAsErrors": false,
-      "perMachine": false,
-      "allowElevation": true,
-      "menuCategory": false,
-      "guid": "jjc-toolbox-inventory-manager"
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        }
-      ],
-      "icon": "public/placeholder-logo.png",
-      "verifyUpdateCodeSignature": false
-    },
-    "mac": {
-      "target": "dmg",
-      "icon": "public/placeholder-logo.png"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "public/placeholder-logo.png"
-    },
-    "npmRebuild": false,
-    "buildDependenciesFromSource": false,
-    "nodeGypRebuild": false,
-    "forceCodeSigning": false
+    "start": "next start"
   },
   "dependencies": {
     "@hookform/resolvers": "3.10.0",
@@ -135,15 +70,10 @@
     "@types/node": "22.18.6",
     "@types/react": "18.3.24",
     "@types/react-dom": "18.3.7",
-    "concurrently": "9.2.1",
-    "cross-env": "10.0.0",
-    "electron": "38.1.2",
-    "electron-builder": "26.0.12",
-    "electron-serve": "3.0.0",
+
     "postcss": "8.5.6",
     "tailwindcss": "4.1.13",
     "tw-animate-css": "1.3.3",
-    "typescript": "5.9.2",
-    "wait-on": "9.0.1"
+    "typescript": "5.9.2"
   }
 }

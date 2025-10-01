@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { exportToCSV, exportToXLSX, exportToJSON, prepareExportData, exportLogsToXLSX } from "@/lib/export-utils"
+import { ItemCardSkeleton } from "@/components/item-card-skeleton"
 import type { Product } from "@/app/page"
 
 interface DashboardViewProps {
@@ -774,16 +775,7 @@ export function DashboardView({
     };
   }, [barcodeInput, isScanning, isBarcodeScanned]);
 
-  if (isLoadingData) {
-    return (
-      <div className="flex h-screen bg-slate-50 dark:bg-slate-900 items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-accent/20 border-t-accent rounded-full animate-spin mx-auto"></div>
-          <p className="text-slate-600 dark:text-slate-400">Loading products...</p>
-        </div>
-      </div>
-    )
-  }
+
   
   // Show empty state if no products are available
   if (!isLoadingData && (!products || products.length === 0)) {
@@ -1279,7 +1271,9 @@ export function DashboardView({
           </div>
 
           {/* Products Display */}
-          {paginatedProducts.length === 0 ? (
+          {isLoadingData ? (
+            <ItemCardSkeleton viewMode={viewMode} count={12} />
+          ) : paginatedProducts.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center">
                 <p className="text-slate-500 dark:text-slate-400 text-lg">No items found</p>
