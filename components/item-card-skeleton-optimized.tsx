@@ -12,9 +12,10 @@ export const ItemCardSkeleton = React.memo<ItemCardSkeletonProps>(({ viewMode, c
 
   if (viewMode === 'grid') {
     return (
-      <div className="grid grid-cols-4 gap-6 pb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 pb-6">
         {skeletonItems.map((i) => (
-          <Card key={i} className="animate-pulse">
+          <Card key={i} className="overflow-hidden relative animate-pulse">
+            <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/30 dark:via-slate-600/30 to-transparent z-10"></div>
             <CardContent className="p-4">
               <Skeleton className="aspect-square bg-slate-200 dark:bg-slate-700 rounded-lg mb-3" />
               <Skeleton className="h-4 bg-slate-200 dark:bg-slate-700 rounded mb-2" />
@@ -34,7 +35,8 @@ export const ItemCardSkeleton = React.memo<ItemCardSkeletonProps>(({ viewMode, c
   return (
     <div className="space-y-3 pb-6">
       {skeletonItems.map((i) => (
-        <Card key={i} className="animate-pulse">
+        <Card key={i} className="overflow-hidden relative animate-pulse">
+          <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/30 dark:via-slate-600/30 to-transparent z-10"></div>
           <CardContent className="p-4">
             <div className="flex items-center space-x-4">
               <Skeleton className="w-16 h-16 bg-slate-200 dark:bg-slate-700 rounded-lg" />

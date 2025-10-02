@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Minus, Plus, Trash2 } from "lucide-react"
+import { Minus, Plus, Trash2, History } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { CheckoutModal } from "./checkout-modal"
 import { CheckoutSuccessCountdown } from "./checkout-success-countdown"
+import { CartRecoveryPanel, CartStatusIndicator } from "./cart-recovery-panel"
 import { apiService } from "@/lib/api-config"
 import { useToast } from "@/hooks/use-toast"
 import type { CartItem } from "@/app/page"
@@ -224,17 +225,29 @@ export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrow
           <Badge variant="secondary" className="dark:bg-slate-700 dark:text-slate-100">
             {items.length} items
           </Badge>
+          <CartStatusIndicator />
         </div>
 
-        <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="w-40 dark:text-slate-100">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="name-asc">Name A-Z</SelectItem>
-            <SelectItem value="name-desc">Name Z-A</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <CartRecoveryPanel 
+            trigger={
+              <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <History className="w-4 h-4" />
+                Cart Memory
+              </Button>
+            }
+          />
+          
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-40 dark:text-slate-100">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name-asc">Name A-Z</SelectItem>
+              <SelectItem value="name-desc">Name Z-A</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Cart Items */}

@@ -231,7 +231,10 @@ export class ApiService {
     // Handle response structure consistently
     let employees: any[] = []
     if (data && typeof data === 'object') {
-      if (data.success && data.data && data.data.employees && Array.isArray(data.data.employees)) {
+      if (data.success && data.employees && Array.isArray(data.employees)) {
+        // Handle structure: {success: true, employees: [...]}
+        employees = data.employees
+      } else if (data.success && data.data && data.data.employees && Array.isArray(data.data.employees)) {
         // Handle nested structure: {success: true, data: {employees: [...], ...}}
         employees = data.data.employees
       } else if (data.success && Array.isArray(data.data)) {

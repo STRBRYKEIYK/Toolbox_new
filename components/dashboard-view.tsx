@@ -2,6 +2,10 @@ import type React from "react"
 import { useState, useMemo, useEffect, useCallback } from "react"
 import { validateBarcode, validateItemId as validateItemIdFormat, validateSearchQuery } from "@/lib/validation"
 import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw, Settings, Wifi, WifiOff, Download, FileText, FileSpreadsheet, Code } from "lucide-react"
+import { useLoading } from "@/components/loading-context"
+import { SearchLoader, BarcodeScanLoader } from "@/components/enhanced-loaders"
+import { AdvancedBarcodeScanner } from "@/components/advanced-barcode-scanner"
+import { OfflineStatusPanel } from "@/components/offline-status"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -15,7 +19,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { exportToCSV, exportToXLSX, exportToJSON, prepareExportData, exportLogsToXLSX } from "@/lib/export-utils"
-import { ItemCardSkeleton } from "@/components/item-card-skeleton"
+import { EnhancedItemCard } from "@/components/enhanced-item-card"
+import { BulkOperationsBar, useBulkSelection } from "@/components/bulk-operations"
 import type { Product } from "@/app/page"
 
 interface DashboardViewProps {
@@ -72,6 +77,7 @@ export function DashboardView({
   const setLastFetchTime = parentSetLastFetchTime ?? setLocalLastFetchTime
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [tempApiUrl, setTempApiUrl] = useState(apiUrl)
+  const [isAdvancedScannerOpen, setIsAdvancedScannerOpen] = useState(false)
 
   // Keep tempApiUrl in sync with apiUrl prop
   useEffect(() => {
@@ -83,6 +89,7 @@ export function DashboardView({
   const [showAvailable, setShowAvailable] = useState(true)
   const [showUnavailable, setShowUnavailable] = useState(true)
   const [localSearchQuery, setLocalSearchQuery] = useState("")
+  const [isSearching, setIsSearching] = useState(false)
   const [sortBy, setSortBy] = useState("name-asc")
   const [barcodeInput, setBarcodeInput] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
@@ -92,11 +99,42 @@ export function DashboardView({
   const [lastKeyTime, setLastKeyTime] = useState<number>(0)
   const [isExporting, setIsExporting] = useState(false)
   const [logs, setLogs] = useState<any[]>([])
+  const [useEnhancedCards] = useState(true)
+
+  // Bulk selection state
+  const {
+    selectedItems,
+    selectAll,
+    clearSelection
+  } = useBulkSelection()
   const [isLoadingLogs, setIsLoadingLogs] = useState(false)
   const [logsError, setLogsError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("api")
   const [hasLoadedLogs, setHasLoadedLogs] = useState(false)
   const { toast } = useToast()
+  const { setSearchLoading, setBarcodeLoading } = useLoading()
+
+  // Debounced search with loading states
+  useEffect(() => {
+    const searchTimer = setTimeout(() => {
+      setIsSearching(false)
+      setSearchLoading(false)
+    }, 300)
+
+    if (localSearchQuery.length > 0) {
+      setIsSearching(true)
+      setSearchLoading(true)
+    }
+
+    return () => {
+      clearTimeout(searchTimer)
+    }
+  }, [localSearchQuery, setSearchLoading, setIsSearching])
+
+  // Barcode scanning loading integration
+  useEffect(() => {
+    setBarcodeLoading(isScanning)
+  }, [isScanning, setBarcodeLoading])
 
   const ITEMS_PER_PAGE = 50
   const BARCODE_SPEED_THRESHOLD = 100 // ms between characters to detect barcode scanner vs manual typing
@@ -924,8 +962,9 @@ export function DashboardView({
             </DialogHeader>
             <div className="py-4">
               <Tabs defaultValue="api" className="w-full" value={activeTab} onValueChange={handleTabChange}>
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="api">API Configuration</TabsTrigger>
+                  <TabsTrigger value="offline">Offline & PWA</TabsTrigger>
                   <TabsTrigger value="export">Export Data</TabsTrigger>
                   <TabsTrigger value="logs">Logs</TabsTrigger>
                 </TabsList>
@@ -952,6 +991,10 @@ export function DashboardView({
                       Cancel
                     </Button>
                   </div>
+                </TabsContent>
+                
+                <TabsContent value="offline" className="space-y-4 mt-4">
+                  <OfflineStatusPanel className="w-full" />
                 </TabsContent>
                 
                 <TabsContent value="export" className="space-y-4 mt-4">
@@ -1282,6 +1325,16 @@ export function DashboardView({
                   className="w-64 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600"
                 />
 
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAdvancedScannerOpen(true)}
+                  className="flex items-center space-x-2 bg-white dark:bg-slate-800 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                >
+                  <Scan className="w-4 h-4" />
+                  <span>Batch Scanner</span>
+                </Button>
+
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger className="w-40 text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
                     <SelectValue />
@@ -1332,9 +1385,57 @@ export function DashboardView({
             </div>
           </div>
 
+          {/* Bulk Operations */}
+          <BulkOperationsBar
+            selectedItems={selectedItems}
+            products={products}
+            onSelectAll={(shouldSelectAll) => selectAll(products.map(p => p.id), shouldSelectAll)}
+            onClearSelection={clearSelection}
+            onBulkAddToCart={(bulkProducts) => {
+              bulkProducts.forEach(product => onAddToCart(product))
+              toast({
+                title: `Added ${bulkProducts.length} items to cart`,
+                description: `${bulkProducts.length} products were successfully added to your cart.`,
+              })
+            }}
+            onBulkExport={async (selectedProducts, format) => {
+              try {
+                // Use existing export functionality
+                const { exportToCSV, exportToXLSX, exportToJSON, prepareExportData } = await import('@/lib/export-utils')
+                const exportData = prepareExportData(selectedProducts)
+                
+                let filename = `selected_products_${new Date().toISOString().split('T')[0]}`
+                
+                switch (format) {
+                  case 'csv':
+                    exportToCSV(exportData, { filename: `${filename}.csv` })
+                    break
+                  case 'xlsx':
+                    exportToXLSX(exportData, { filename: `${filename}.xlsx` })
+                    break
+                  case 'json':
+                    exportToJSON(exportData, { filename: `${filename}.json` })
+                    break
+                }
+                
+                toast({
+                  title: "Export Successful",
+                  description: `${selectedProducts.length} items exported as ${format.toUpperCase()}`
+                })
+              } catch (error) {
+                console.error('Export failed:', error)
+                toast({
+                  title: "Export Failed",
+                  description: "Failed to export selected items",
+                  variant: "destructive"
+                })
+              }
+            }}
+          />
+
           {/* Products Display */}
-          {isLoadingData ? (
-            <ItemCardSkeleton viewMode={viewMode} count={12} />
+          {isLoadingData || isSearching ? (
+            <SearchLoader query={searchQuery || localSearchQuery} />
           ) : paginatedProducts.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center">
@@ -1349,66 +1450,31 @@ export function DashboardView({
           ) : (
             <>
               {viewMode === "grid" ? (
-                <div className="grid grid-cols-4 gap-6 pb-6">
-                  {paginatedProducts.map((product) => (
-                    <Card key={product.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                      <CardContent className="p-4" onClick={() => onViewItem(product)}>
-                        <div className="aspect-square bg-slate-100 dark:bg-slate-700 rounded-lg mb-3 flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm">
-                          image here
-                        </div>
-
-                        <h3 className="font-medium text-sm mb-2 line-clamp-2 dark:text-slate-100">{product.name}</h3>
-                        <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">Brand: {product.brand}</p>
-                        <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">Balance: {product.balance}</p>
-
-                        <div className="flex items-center justify-between">
-                          <Badge className={`${getStatusColor(product.status)} text-white text-xs`}>
-                            {getStatusText(product.status)}
-                          </Badge>
-                          <Button
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onAddToCart(product)
-                            }}
-                            disabled={product.status === "out-of-stock"}
-                          >
-                            Add
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-3 pb-6">
-                  {paginatedProducts.map((product) => (
-                    <Card key={product.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                      <CardContent className="p-4" onClick={() => onViewItem(product)}>
-                        <div className="flex items-center space-x-4">
-                          <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-slate-500 dark:text-slate-400 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 pb-6">
+                  {paginatedProducts.map((product) => 
+                    useEnhancedCards ? (
+                      <EnhancedItemCard
+                        key={product.id}
+                        product={product}
+                        onAddToCart={onAddToCart}
+                        onViewItem={onViewItem}
+                        viewMode="grid"
+                      />
+                    ) : (
+                      <Card key={product.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                        <CardContent className="p-4" onClick={() => onViewItem(product)}>
+                          <div className="aspect-square bg-slate-100 dark:bg-slate-700 rounded-lg mb-3 flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm">
                             image here
                           </div>
 
-                          <div className="flex-1">
-                            <h3 className="font-medium mb-1 dark:text-slate-100">{product.name}</h3>
-                            <div className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
-                              <p>Brand: {product.brand}</p>
-                              <p>Item Type: {product.itemType}</p>
-                              <p>Location: {product.location}</p>
-                            </div>
-                          </div>
+                          <h3 className="font-medium text-sm mb-2 line-clamp-2 dark:text-slate-100">{product.name}</h3>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">Brand: {product.brand}</p>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">Balance: {product.balance}</p>
 
-                          <div className="text-right space-y-2">
-                            <div className="text-lg font-bold dark:text-slate-100">
-                              BAL: {product.balance.toString().padStart(2, "0")}
-                            </div>
+                          <div className="flex items-center justify-between">
                             <Badge className={`${getStatusColor(product.status)} text-white text-xs`}>
                               {getStatusText(product.status)}
                             </Badge>
-                          </div>
-
-                          <div className="flex flex-col space-y-2">
                             <Button
                               size="sm"
                               onClick={(e) => {
@@ -1420,12 +1486,67 @@ export function DashboardView({
                               Add
                             </Button>
                           </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2 sm:space-y-3 pb-4 sm:pb-6">
+                  {paginatedProducts.map((product) => 
+                    useEnhancedCards ? (
+                      <EnhancedItemCard
+                        key={product.id}
+                        product={product}
+                        onAddToCart={onAddToCart}
+                        onViewItem={onViewItem}
+                        viewMode="list"
+                      />
+                    ) : (
+                      <Card key={product.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                        <CardContent className="p-4" onClick={() => onViewItem(product)}>
+                          <div className="flex items-center space-x-4">
+                            <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-slate-500 dark:text-slate-400 text-xs">
+                              image here
+                            </div>
 
-                          <div className={`w-2 h-full ${getStatusColor(product.status)} rounded-r-lg`}></div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                            <div className="flex-1">
+                              <h3 className="font-medium mb-1 dark:text-slate-100">{product.name}</h3>
+                              <div className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+                                <p>Brand: {product.brand}</p>
+                                <p>Item Type: {product.itemType}</p>
+                                <p>Location: {product.location}</p>
+                              </div>
+                            </div>
+
+                            <div className="text-right space-y-2">
+                              <div className="text-lg font-bold dark:text-slate-100">
+                                BAL: {product.balance.toString().padStart(2, "0")}
+                              </div>
+                              <Badge className={`${getStatusColor(product.status)} text-white text-xs`}>
+                                {getStatusText(product.status)}
+                              </Badge>
+                            </div>
+
+                            <div className="flex flex-col space-y-2">
+                              <Button
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onAddToCart(product)
+                                }}
+                                disabled={product.status === "out-of-stock"}
+                              >
+                                Add
+                              </Button>
+                            </div>
+
+                            <div className={`w-2 h-full ${getStatusColor(product.status)} rounded-r-lg`}></div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  )}
                 </div>
               )}
 
@@ -1467,6 +1588,33 @@ export function DashboardView({
           )}
         </div>
       </div>
+      
+      {/* Enhanced Barcode Scanner Loading Overlay */}
+      <BarcodeScanLoader isScanning={isScanning} />
+      
+      {/* Advanced Barcode Scanner Dialog */}
+      <Dialog open={isAdvancedScannerOpen} onOpenChange={setIsAdvancedScannerOpen}>
+        <DialogContent className="sm:max-w-6xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Scan className="w-5 h-5 text-blue-600" />
+              <span>Advanced Barcode Scanner</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <AdvancedBarcodeScanner 
+              products={products}
+              onProductScanned={(product) => {
+                // Product is automatically added to cart by the scanner component
+                toast({
+                  title: "Product Added",
+                  description: `${product.name} has been added to your cart.`,
+                })
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

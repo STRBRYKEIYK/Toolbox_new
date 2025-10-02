@@ -1,0 +1,94 @@
+{
+  "name": "Toolbox Inventory - Warehouse Management",
+  "short_name": "Toolbox Inventory",
+  "description": "Professional warehouse inventory management system with offline capability for employees",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en-US",
+  "categories": ["productivity", "business", "utilities"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/placeholder-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "16x16 32x32 48x48",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Scan Items",
+      "short_name": "Scanner",
+      "description": "Quick access to barcode scanner",
+      "url": "/?action=scan",
+      "icons": [
+        {
+          "src": "/placeholder-logo.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "View Cart",
+      "short_name": "Cart",
+      "description": "Access your cart items",
+      "url": "/?action=cart",
+      "icons": [
+        {
+          "src": "/placeholder-logo.svg",
+          "sizes": "96x96", 
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Search Items",
+      "short_name": "Search",
+      "description": "Search inventory items",
+      "url": "/?action=search",
+      "icons": [
+        {
+          "src": "/placeholder-logo.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/placeholder.jpg",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "platform": "wide",
+      "label": "Dashboard view showing inventory items with search and barcode scanning capabilities"
+    },
+    {
+      "src": "/placeholder.jpg", 
+      "sizes": "390x844",
+      "type": "image/jpeg",
+      "platform": "narrow",
+      "label": "Mobile view of inventory scanner for warehouse workers"
+    }
+  ],
+  "related_applications": [],
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "handle_links": "preferred",
+  "capture_links": "existing-client-navigate",
+  "protocol_handlers": []
+}

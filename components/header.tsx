@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Search, Home, ShoppingCart, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { CartStatusIndicator } from "@/components/cart-recovery-panel"
 import type { ViewType } from "@/app/page"
 
 interface HeaderProps {
@@ -19,10 +20,54 @@ export function Header({ cartItemCount, currentView, onViewChange, onSearch }: H
   const [searchQuery, setSearchQuery] = useState("")
   const [showSuggestions, setShowSuggestions] = useState(false)
 
-  // Mock search suggestions - in a real app this would come from an API
-  const suggestions = ["Lorem ipsum tools", "Praesent equipment", "Ornare supplies", "Malesuada items"].filter(
-    (suggestion) => suggestion.toLowerCase().includes(searchQuery.toLowerCase()) && searchQuery.length > 0,
-  )
+  // Real search suggestions based on product data
+  const [products, setProducts] = useState<Array<{id: string, name: string, brand: string, itemType: string}>>([])
+  
+  // Load products for autocomplete
+  useEffect(() => {
+    const loadProductsForSearch = () => {
+      try {
+        const cached = localStorage.getItem('cached-products')
+        if (cached) {
+          const productData = JSON.parse(cached)
+          setProducts(productData.map((p: any) => ({
+            id: p.id || p.item_no,
+            name: p.name || p.item_name || 'Unknown',
+            brand: p.brand || 'Unknown',
+            itemType: p.itemType || p.item_type || 'General'
+          })))
+        }
+      } catch (error) {
+        console.warn('Failed to load products for search:', error)
+      }
+    }
+    loadProductsForSearch()
+  }, [])
+  
+  // Generate smart suggestions
+  const suggestions = React.useMemo(() => {
+    if (searchQuery.length < 2) return []
+    
+    const query = searchQuery.toLowerCase()
+    const matches = new Set<string>()
+    
+    products.forEach(product => {
+      // Match product names
+      if (product.name.toLowerCase().includes(query)) {
+        matches.add(product.name)
+      }
+      // Match brands
+      if (product.brand.toLowerCase().includes(query)) {
+        matches.add(`${product.brand} (Brand)`)
+      }
+      // Match categories
+      if (product.itemType.toLowerCase().includes(query)) {
+        matches.add(`${product.itemType} (Category)`)
+      }
+    })
+    
+    return Array.from(matches).slice(0, 6) // Limit to 6 suggestions
+  }, [searchQuery, products])
 
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
@@ -57,7 +102,7 @@ export function Header({ cartItemCount, currentView, onViewChange, onSearch }: H
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-slate-800 dark:bg-slate-900 text-white shadow-lg">
-      <div className="flex items-center justify-between px-6 py-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 sm:px-6 py-2 sm:py-3 gap-2 sm:gap-0">
         {/* Logo */}
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center">
@@ -67,7 +112,7 @@ export function Header({ cartItemCount, currentView, onViewChange, onSearch }: H
         </div>
 
         {/* Search Bar */}
-        <div className="flex-1 max-w-2xl mx-8 relative">
+        <div className="flex-1 max-w-full sm:max-w-2xl sm:mx-8 mx-0 relative order-2 sm:order-none">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
             <Input
@@ -108,34 +153,41 @@ export function Header({ cartItemCount, currentView, onViewChange, onSearch }: H
         </div>
 
         {/* Navigation Icons */}
-        <div className="flex items-center space-x-4">
-          <ThemeToggle />
+        <div className="flex items-center space-x-2 sm:space-x-4 order-1 sm:order-none">
+          <div className="hidden sm:flex items-center gap-2">
+            <CartStatusIndicator />
+            <ThemeToggle />
+          </div>
 
           <Button
             variant={currentView === "dashboard" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onViewChange("dashboard")}
-            className="text-white hover:bg-white/10 dark:hover:bg-white/5"
+            className="text-white hover:bg-white/10 dark:hover:bg-white/5 px-2 sm:px-3"
           >
-            <Home className="w-5 h-5" />
+            <Home className="w-4 h-4 sm:w-5 sm:h-5" />
           </Button>
 
           <Button
             variant={currentView === "cart" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onViewChange("cart")}
-            className="text-white hover:bg-white/10 dark:hover:bg-white/5 relative"
+            className="text-white hover:bg-white/10 dark:hover:bg-white/5 relative px-2 sm:px-3"
           >
-            <ShoppingCart className="w-5 h-5" />
+            <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
             {cartItemCount > 0 && (
               <Badge
                 variant="destructive"
-                className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs"
+                className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center p-0 text-xs"
               >
                 {cartItemCount}
               </Badge>
             )}
           </Button>
+          
+          <div className="sm:hidden">
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </header>

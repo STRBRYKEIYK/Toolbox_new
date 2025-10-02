@@ -7,7 +7,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Add security headers
+  // Add security headers and PWA headers
   async headers() {
     return [
       {
@@ -27,8 +27,34 @@ const nextConfig = {
           },
         ],
       },
+      // PWA and Service Worker headers
+      {
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/',
+          },
+        ],
+      },
+      {
+        source: '/manifest.json',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
     ]
   },
+  // Optimize for PWA
+  poweredByHeader: false,
+  compress: true,
 }
 
 export default nextConfig
