@@ -23,8 +23,8 @@ interface CartViewProps {
   items: CartItem[]
   onUpdateQuantity: (id: string, quantity: number) => void
   onRemoveItem: (id: string) => void
-  onReturnToBrowsing?: () => void // Added callback to return to dashboard
-  onRefreshData?: () => void // Added callback to refresh inventory data
+  onReturnToBrowsing?: () => void
+  onRefreshData?: (() => void) | undefined
 }
 
 export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrowsing, onRefreshData }: CartViewProps) {

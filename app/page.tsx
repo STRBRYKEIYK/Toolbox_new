@@ -44,6 +44,12 @@ export default function HomePage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [headerSearchQuery, setHeaderSearchQuery] = useState("")
   const [dashboardRefresh, setDashboardRefresh] = useState<(() => void) | null>(null)
+  
+  // Move products state to parent to prevent unnecessary API calls
+  const [products, setProducts] = useState<Product[]>([])
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true)
+  const [productsDataSource, setProductsDataSource] = useState<"api" | "cached">("cached")
+  const [productsLastFetchTime, setProductsLastFetchTime] = useState<Date | null>(null)
 
   useEffect(() => {
     const testConnection = async () => {
@@ -134,7 +140,8 @@ export default function HomePage() {
       />
 
       <main className="pt-16">
-        {currentView === "dashboard" && (
+        {/* Keep DashboardView mounted but conditionally visible */}
+        <div className={currentView === "dashboard" ? "block" : "hidden"}>
           <DashboardView 
             onAddToCart={addToCart} 
             onViewItem={viewItemDetail} 
@@ -143,8 +150,17 @@ export default function HomePage() {
             apiUrl={apiUrl}
             onApiUrlChange={handleApiUrlChange}
             isConnected={isApiConnected}
+            // Pass products state from parent
+            products={products}
+            setProducts={setProducts}
+            isLoadingProducts={isLoadingProducts}
+            setIsLoadingProducts={setIsLoadingProducts}
+            dataSource={productsDataSource}
+            setDataSource={setProductsDataSource}
+            lastFetchTime={productsLastFetchTime}
+            setLastFetchTime={setProductsLastFetchTime}
           />
-        )}
+        </div>
 
         {currentView === "cart" && (
           <CartView
@@ -152,7 +168,7 @@ export default function HomePage() {
             onUpdateQuantity={updateCartItemQuantity}
             onRemoveItem={removeFromCart}
             onReturnToBrowsing={() => setCurrentView("dashboard")}
-            onRefreshData={dashboardRefresh || undefined}
+            onRefreshData={dashboardRefresh ?? undefined}
           />
         )}
 

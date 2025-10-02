@@ -1,6 +1,7 @@
 import type React from "react"
-import { useState, useMemo, useEffect, useRef } from "react"
-import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw, ZapIcon, Settings, Wifi, WifiOff, Download, FileText, FileSpreadsheet, Code } from "lucide-react"
+import { useState, useMemo, useEffect, useCallback } from "react"
+import { validateBarcode, validateItemId as validateItemIdFormat, validateSearchQuery } from "@/lib/validation"
+import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw, Settings, Wifi, WifiOff, Download, FileText, FileSpreadsheet, Code } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -21,10 +22,19 @@ interface DashboardViewProps {
   onAddToCart: (product: Product, quantity?: number) => void
   onViewItem: (product: Product) => void
   searchQuery?: string
-  onRefreshData?: (refreshFunction: () => void) => void // Callback to expose refresh function
+  onRefreshData?: (refreshFunction: () => void) => void
   apiUrl?: string
   onApiUrlChange?: (url: string) => void
   isConnected?: boolean
+  // New props to accept state from parent
+  products?: Product[]
+  setProducts?: React.Dispatch<React.SetStateAction<Product[]>>
+  isLoadingProducts?: boolean
+  setIsLoadingProducts?: React.Dispatch<React.SetStateAction<boolean>>
+  dataSource?: "api" | "cached"
+  setDataSource?: React.Dispatch<React.SetStateAction<"api" | "cached">>
+  lastFetchTime?: Date | null
+  setLastFetchTime?: React.Dispatch<React.SetStateAction<Date | null>>
 }
 
 export function DashboardView({ 
@@ -34,12 +44,32 @@ export function DashboardView({
   onRefreshData,
   apiUrl = "",
   onApiUrlChange,
-  isConnected = false
+  isConnected = false,
+  // Parent state props
+  products: parentProducts,
+  setProducts: parentSetProducts,
+  isLoadingProducts: parentIsLoadingData,
+  setIsLoadingProducts: parentSetIsLoadingData,
+  dataSource: parentDataSource,
+  setDataSource: parentSetDataSource,
+  lastFetchTime: parentLastFetchTime,
+  setLastFetchTime: parentSetLastFetchTime
 }: DashboardViewProps) {
-  const [products, setProducts] = useState<Product[]>([])
-  const [isLoadingData, setIsLoadingData] = useState(true)
-  const [dataSource, setDataSource] = useState<"api" | "cached">("cached")
-  const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
+  // Use parent state if available, otherwise fallback to local state
+  const [localProducts, setLocalProducts] = useState<Product[]>([])
+  const [localIsLoadingData, setLocalIsLoadingData] = useState(true)
+  const [localDataSource, setLocalDataSource] = useState<"api" | "cached">("cached")
+  const [localLastFetchTime, setLocalLastFetchTime] = useState<Date | null>(null)
+  
+  // Use parent state if provided, otherwise use local state
+  const products = parentProducts ?? localProducts
+  const setProducts = parentSetProducts ?? setLocalProducts
+  const isLoadingData = parentIsLoadingData ?? localIsLoadingData
+  const setIsLoadingData = parentSetIsLoadingData ?? setLocalIsLoadingData
+  const dataSource = parentDataSource ?? localDataSource
+  const setDataSource = parentSetDataSource ?? setLocalDataSource
+  const lastFetchTime = parentLastFetchTime ?? localLastFetchTime
+  const setLastFetchTime = parentSetLastFetchTime ?? setLocalLastFetchTime
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [tempApiUrl, setTempApiUrl] = useState(apiUrl)
 
@@ -215,20 +245,7 @@ export function DashboardView({
     }
   }
 
-  const handleRefreshData = () => {
-    fetchProductsFromAPI()
-  }
-  
-  const handleSaveSettings = () => {
-    if (onApiUrlChange) {
-      onApiUrlChange(tempApiUrl)
-    }
-    setIsSettingsOpen(false)
-    // Refresh data after changing API URL
-    setTimeout(() => {
-      fetchProductsFromAPI()
-    }, 500)
-  }
+  // Handlers are now defined above with useCallback
 
   // Export handlers
   const handleExportCSV = async () => {
@@ -409,6 +426,12 @@ export function DashboardView({
   }
 
   useEffect(() => {
+    // Skip initial data loading if parent is providing products state
+    if (parentProducts !== undefined) {
+      console.log("[v0] Using products from parent component, skipping initial fetch");
+      return;
+    }
+    
     // Try to load cached data immediately while we wait for API response
     const { products: cachedProducts, timestamp } = loadProductsFromLocalStorage();
     
@@ -425,7 +448,7 @@ export function DashboardView({
       // No cached data, just fetch from API
       fetchProductsFromAPI();
     }
-  }, [])
+  }, [parentProducts])
 
   /**
    * Validates that the entered value corresponds to a valid item ID
@@ -433,21 +456,24 @@ export function DashboardView({
    * @returns The found product or null if not found
    */
   const validateItemId = (value: string): Product | null => {
-    if (!value.trim()) return null;
+    // First, validate the input format
+    const validation = validateItemIdFormat(value);
+    if (!validation.isValid) {
+      console.warn("[validateItemId] Input validation failed:", validation.error);
+      return null;
+    }
 
-    let searchId = value.trim();
-    console.log("[validateItemId] Input:", value, "-> initial searchId:", searchId);
+    const cleanValue = validation.value!;
+    let searchId = cleanValue;
+    console.log("[validateItemId] Input:", value, "-> cleaned:", cleanValue, "-> initial searchId:", searchId);
 
     // Check if it's a barcode format (ITM followed by digits)
-    const barcodeMatch = value.trim().match(/^ITM(\d+)$/i);
-    if (barcodeMatch) {
+    const barcodeMatch = cleanValue.match(/^ITM(\d+)$/i);
+    if (barcodeMatch && barcodeMatch[1]) {
       // Convert barcode digits to number (removes leading zeros)
-      // ITM001 -> "001" -> 1 -> "1"
-      // ITM010 -> "010" -> 10 -> "10"
-      // ITM100 -> "100" -> 100 -> "100"
       const itemNumber = parseInt(barcodeMatch[1], 10);
       searchId = itemNumber.toString();
-      console.log("[validateItemId] Barcode detected:", value, "-> extracted:", barcodeMatch[1], "-> parsed:", itemNumber, "-> searchId:", searchId);
+      console.log("[validateItemId] Barcode detected:", cleanValue, "-> extracted:", barcodeMatch[1], "-> parsed:", itemNumber, "-> searchId:", searchId);
     }
 
     // Search for product by exact ID match
@@ -455,7 +481,7 @@ export function DashboardView({
     console.log("[validateItemId] Searching for item ID:", searchId, "-> found:", foundProduct ? foundProduct.name : "NOT FOUND");
 
     return foundProduct || null;
-  }
+  };
   useEffect(() => {
     if (onRefreshData) {
       onRefreshData(handleRefreshData)
@@ -544,7 +570,18 @@ export function DashboardView({
 
   // Update local search when header search changes
   useEffect(() => {
-    setLocalSearchQuery(searchQuery)
+    // Validate and sanitize search query
+    if (searchQuery) {
+      const validation = validateSearchQuery(searchQuery);
+      if (validation.isValid) {
+        setLocalSearchQuery(validation.value!);
+      } else {
+        console.warn("[Dashboard] Invalid search query:", validation.error);
+        setLocalSearchQuery(""); // Clear invalid query
+      }
+    } else {
+      setLocalSearchQuery("");
+    }
   }, [searchQuery])
   
   // Update tempApiUrl when apiUrl prop changes
@@ -557,11 +594,61 @@ export function DashboardView({
     setCurrentPage(1)
   }, [selectedCategory, showAvailable, showUnavailable, searchQuery, localSearchQuery, sortBy])
 
-  // Get unique categories
+  // Get unique categories (memoized)
   const categories = useMemo(() => {
     const uniqueTypes = [...new Set(products.map((p) => p.itemType))]
     return ["all", ...uniqueTypes]
   }, [products])
+
+  // Memoized handlers to prevent unnecessary re-renders
+  const handleRefreshData = useCallback(() => {
+    fetchProductsFromAPI()
+  }, []) // fetchProductsFromAPI will be stable
+  
+  const handleSaveSettings = useCallback(() => {
+    if (onApiUrlChange) {
+      onApiUrlChange(tempApiUrl)
+    }
+    setIsSettingsOpen(false)
+    // Refresh data after changing API URL
+    setTimeout(() => {
+      fetchProductsFromAPI()
+    }, 500)
+  }, [tempApiUrl, onApiUrlChange]) // Dependencies are stable
+
+  const handleBarcodeSubmit = useCallback(() => {
+    console.log("[Manual Submit] Submitting barcodeInput:", barcodeInput)
+    setIsScanning(false)
+    
+    if (!barcodeInput.trim()) {
+      toast({
+        title: "Invalid Item ID",
+        description: "Please enter a valid item ID or scan a barcode",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate the item ID
+    const foundProduct = validateItemId(barcodeInput)
+
+    if (foundProduct) {
+      console.log("[Manual Submit] Adding item:", foundProduct.name)
+      onAddToCart(foundProduct)
+      setBarcodeInput("")
+      setIsBarcodeScanned(false)
+      toast({
+        title: "Item Added",
+        description: `${foundProduct.name} has been added to your toolbox`,
+      })
+    } else {
+      toast({
+        title: "Item Not Found",
+        description: `No item found with ID: ${barcodeInput}`,
+        variant: "destructive",
+      })
+    }
+  }, [barcodeInput, toast, onAddToCart, validateItemId])
 
   // Filter and sort products
   const { paginatedProducts, totalFilteredCount, hasMorePages } = useMemo(() => {
@@ -690,59 +777,34 @@ export function DashboardView({
    */
   const handleBarcodeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    
+    // Validate barcode input
+    const barcodeValidation = validateBarcode(value);
+    if (value && !barcodeValidation.isValid) {
+      console.warn("[handleBarcodeInputChange] Invalid barcode format:", barcodeValidation.error);
+      // Still allow input for partial typing, but don't process
+    }
+    
     setBarcodeInput(value);
     
-    // Detect if this is likely from a scanner based on typing speed
-    const currentTime = Date.now();
-    const isLikelyScanner = detectScanMethod(currentTime);
-    
-    // Only set scanning indicator if the input is fast enough to be from a scanner
-    // and there are multiple characters
-    if (isLikelyScanner && value.length > 1) {
-      setIsScanning(true);
-      setIsBarcodeScanned(true);
-    } else {
-      setIsBarcodeScanned(false);
+    // Only process valid barcode formats
+    if (barcodeValidation.isValid) {
+      // Detect if this is likely from a scanner based on typing speed
+      const currentTime = Date.now();
+      const isLikelyScanner = detectScanMethod(currentTime);
+      
+      // Only set scanning indicator if the input is fast enough to be from a scanner
+      // and there are multiple characters
+      if (isLikelyScanner && value.length > 1) {
+        setIsScanning(true);
+        setIsBarcodeScanned(true);
+      } else {
+        setIsBarcodeScanned(false);
+      }
     }
-  }
+  };
 
-  /**
-   * Handles the submission of a barcode/item ID
-   * Called either manually by button press or automatically from scanner
-   */
-  const handleBarcodeSubmit = () => {
-    console.log("[Manual Submit] Submitting barcodeInput:", barcodeInput);
-    setIsScanning(false);
-    
-    if (!barcodeInput.trim()) {
-      toast({
-        title: "Invalid Item ID",
-        description: "Please enter a valid item ID or scan a barcode",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Validate the item ID
-    const foundProduct = validateItemId(barcodeInput);
-
-    if (foundProduct) {
-      console.log("[Manual Submit] Adding item:", foundProduct.name);
-      onAddToCart(foundProduct)
-      setBarcodeInput("")
-      setIsBarcodeScanned(false)
-      toast({
-        title: "Item Added",
-        description: `${foundProduct.name} has been added to your toolbox`,
-      })
-    } else {
-      toast({
-        title: "Item Not Found",
-        description: `No item found with ID: ${barcodeInput}`,
-        variant: "destructive",
-      })
-    }
-  }
+  // handleBarcodeSubmit is defined above with useCallback
 
   /**
    * Handles key presses in the barcode input field

@@ -1,10 +1,13 @@
+import { validateApiUrl, ApiItemSchema, ApiResponseSchema, rateLimiter, sanitizeForLog } from '@/lib/validation'
+import env from '@/lib/env'
+
 export interface ApiConfig {
   baseUrl: string
   isConnected: boolean
 }
 
 export const DEFAULT_API_CONFIG: ApiConfig = {
-  baseUrl: "https://qxw.2ee.mytemp.website",
+  baseUrl: env.API_BASE_URL,
   isConnected: false,
 }
 
@@ -65,7 +68,19 @@ export class ApiService {
   }
 
   updateConfig(newConfig: Partial<ApiConfig>) {
+    // Validate baseUrl if it's being updated
+    if (newConfig.baseUrl) {
+      const urlValidation = validateApiUrl(newConfig.baseUrl)
+      if (!urlValidation.isValid) {
+        throw new Error(`Invalid API URL: ${urlValidation.error}`)
+      }
+    }
+    
     this.config = { ...this.config, ...newConfig }
+    console.log("[v0] API config updated:", {
+      baseUrl: this.config.baseUrl,
+      isConnected: this.config.isConnected
+    })
   }
 
   getConfig(): ApiConfig {
@@ -74,10 +89,25 @@ export class ApiService {
 
   async testConnection(): Promise<boolean> {
     try {
+      // Validate URL before making request
+      const urlValidation = validateApiUrl(this.config.baseUrl)
+      if (!urlValidation.isValid) {
+        console.error("[v0] Invalid API URL:", urlValidation.error)
+        this.config.isConnected = false
+        return false
+      }
+
+      // Rate limiting check
+      if (!rateLimiter.isAllowed('testConnection', 10, 60000)) {
+        console.warn("[v0] Rate limit exceeded for connection test")
+        return this.config.isConnected
+      }
+
       const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.items}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          "User-Agent": "Toolbox-App/1.0",
         },
         mode: "cors",
         signal: AbortSignal.timeout(5000),
@@ -90,14 +120,24 @@ export class ApiService {
         console.log("[v0] API connection successful")
       } else {
         console.log("[v0] API connection failed - response not ok:", response.status, response.statusText)
+        
+        // Log additional error info for debugging
+        try {
+          const errorText = await response.text()
+          console.log("[v0] API error response:", sanitizeForLog(errorText))
+        } catch {
+          // Ignore if can't read response
+        }
       }
 
       return isConnected
     } catch (error) {
-      console.error("[v0] API connection test failed:", error)
+      console.error("[v0] API connection test failed:", sanitizeForLog(error))
 
       if (error instanceof TypeError && error.message.includes("Failed to fetch")) {
         console.error("[v0] This is likely a CORS issue or the API server is not running")
+      } else if (error instanceof DOMException && error.name === 'AbortError') {
+        console.error("[v0] Connection test timed out")
       }
 
       this.config.isConnected = false
@@ -107,23 +147,34 @@ export class ApiService {
 
   async fetchItems(): Promise<any[]> {
     try {
-      // Fetch all items with a high limit to get all available items
+      // Rate limiting check
+      if (!rateLimiter.isAllowed('fetchItems', 30, 60000)) {
+        throw new Error("Rate limit exceeded for fetching items")
+      }
+
       const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.items}?limit=1000`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          "User-Agent": "Toolbox-App/1.0",
         },
         mode: "cors",
-        signal: AbortSignal.timeout(15000), // Increased timeout for larger responses
+        signal: AbortSignal.timeout(15000),
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch items: ${response.status} ${response.statusText}`)
+        const errorText = await response.text().catch(() => 'Unknown error')
+        throw new Error(`Failed to fetch items: ${response.status} ${response.statusText} - ${sanitizeForLog(errorText)}`)
       }
 
       const responseData = await response.json()
       
-      // Handle the API response structure: {success: true, data: [...]}
+      // Validate API response structure
+      const validatedResponse = ApiResponseSchema.safeParse(responseData)
+      if (!validatedResponse.success && !Array.isArray(responseData)) {
+        console.warn("[v0] API response validation failed:", validatedResponse.error?.errors)
+      }
+      
       let items: any[] = []
       
       if (responseData && typeof responseData === 'object') {
@@ -131,9 +182,8 @@ export class ApiService {
           items = responseData.data
           console.log("[v0] Successfully fetched items from API:", items.length, "items")
           
-          // Log pagination info if available
           if (responseData.pagination) {
-            console.log("[v0] API pagination info:", responseData.pagination)
+            console.log("[v0] API pagination info:", sanitizeForLog(responseData.pagination))
           }
         } else if (Array.isArray(responseData)) {
           items = responseData
@@ -146,9 +196,17 @@ export class ApiService {
         throw new Error("Invalid API response format")
       }
       
+      // Validate each item (optional - can be disabled for performance)
+      if (process.env.NODE_ENV === 'development' && items.length > 0) {
+        const sampleValidation = ApiItemSchema.safeParse(items[0])
+        if (!sampleValidation.success) {
+          console.warn("[v0] Item validation failed for sample item:", sampleValidation.error?.errors)
+        }
+      }
+      
       return items
     } catch (error) {
-      console.error("[v0] Failed to fetch items:", error)
+      console.error("[v0] Failed to fetch items:", sanitizeForLog(error))
       throw error
     }
   }
