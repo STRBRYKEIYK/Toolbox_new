@@ -4,7 +4,7 @@ export interface ApiConfig {
 }
 
 export const DEFAULT_API_CONFIG: ApiConfig = {
-  baseUrl: "http://192.168.68.140:3001",
+  baseUrl: "https://qxw.2ee.mytemp.website",
   isConnected: false,
 }
 
