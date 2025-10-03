@@ -24,9 +24,9 @@ const STATIC_ASSETS = [
 
 // API endpoints to cache
 const API_ENDPOINTS = [
-  '/api/products',
+  '/api/items',
   '/api/employees',
-  '/api/cart',
+  '/api/employee-logs',
 ]
 
 // Install event - cache critical resources
@@ -289,12 +289,12 @@ async function updateCacheInBackground(request, cacheKey) {
 function createOfflineFallback(request) {
   const url = new URL(request.url)
   
-  if (url.pathname.includes('/api/products')) {
+  if (url.pathname.includes('/api/items')) {
     return new Response(JSON.stringify({
       success: false,
       error: 'Offline mode: No cached data available',
       offline: true,
-      products: []
+      data: []
     }), {
       status: 503,
       headers: {
@@ -309,7 +309,7 @@ function createOfflineFallback(request) {
       success: false,
       error: 'Offline mode: No cached data available',
       offline: true,
-      employees: []
+      data: []
     }), {
       status: 503,
       headers: {
@@ -408,7 +408,7 @@ async function prefetchCriticalData() {
     const baseUrl = self.location.origin
     
     const criticalUrls = [
-      `${baseUrl}/api/products`,
+      `${baseUrl}/api/items`,
       `${baseUrl}/api/employees`
     ]
     

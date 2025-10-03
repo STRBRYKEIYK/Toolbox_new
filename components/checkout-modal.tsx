@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { apiService } from "@/lib/api-config"
+import { apiService } from "@/lib/api_service"
 import type { CartItem } from "@/app/page"
 
 interface Employee {
@@ -191,14 +191,18 @@ export function CheckoutModal({ isOpen, onClose, items, onConfirmCheckout, isCom
 
       console.log("[CheckoutModal] Logging transaction:", transactionData)
 
-      // Save to employee logs
-      await fetch(`${apiService.getConfig().baseUrl}/api/employeelogs`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(transactionData),
-      })
+      // Save to employee logs using the new service method
+      try {
+        await apiService.logTransaction({
+          userId: selectedEmployee.id?.toString() || selectedEmployee.fullName,
+          items: items,
+          username: selectedEmployee.fullName,
+          totalItems: totalItems,
+          timestamp: new Date().toISOString()
+        })
+      } catch (logError) {
+        console.warn("[CheckoutModal] Failed to log transaction (non-critical):", logError)
+      }
 
       // Pass the employee object directly (not wrapped in userId)
       onConfirmCheckout(selectedEmployee)

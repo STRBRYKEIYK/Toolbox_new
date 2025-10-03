@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CheckoutModal } from "./checkout-modal"
 import { CheckoutSuccessCountdown } from "./checkout-success-countdown"
 import { CartRecoveryPanel, CartStatusIndicator } from "./cart-recovery-panel"
-import { apiService } from "@/lib/api-config"
+import { apiService } from "@/lib/api_service"
 import { useToast } from "@/hooks/use-toast"
 import type { CartItem } from "@/app/page"
 
