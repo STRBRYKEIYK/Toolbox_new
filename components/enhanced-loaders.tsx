@@ -59,10 +59,10 @@ export function SearchLoader({ query }: { query?: string }) {
 // Connection status indicator
 export function ConnectionStatus({ isOnline }: { isOnline: boolean }) {
   return (
-    <div className={`fixed top-16 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 ${
+    <div className={`flex items-center gap-2 px-2 py-1 rounded text-xs font-medium transition-all duration-300 ${
       isOnline 
-        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
     }`}>
       {isOnline ? (
         <>

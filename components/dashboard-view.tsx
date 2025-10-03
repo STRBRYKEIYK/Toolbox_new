@@ -1,10 +1,9 @@
 import type React from "react"
 import { useState, useMemo, useEffect, useCallback } from "react"
 import { validateBarcode, validateItemId as validateItemIdFormat, validateSearchQuery } from "@/lib/validation"
-import { Filter, Grid, List, BarChart3, Scan, ChevronDown, RefreshCw, Settings, Wifi, WifiOff, Download, FileText, FileSpreadsheet, Code } from "lucide-react"
+import { Filter, Grid, List, Scan, ChevronDown, RefreshCw, Settings, Wifi, Download, FileText, FileSpreadsheet, Code, Plus, Package } from "lucide-react"
 import { useLoading } from "@/components/loading-context"
 import { SearchLoader, BarcodeScanLoader } from "@/components/enhanced-loaders"
-import { AdvancedBarcodeScanner } from "@/components/advanced-barcode-scanner"
 import { OfflineStatusPanel } from "@/components/offline-status"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -77,7 +76,6 @@ export function DashboardView({
   const setLastFetchTime = parentSetLastFetchTime ?? setLocalLastFetchTime
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [tempApiUrl, setTempApiUrl] = useState(apiUrl)
-  const [isAdvancedScannerOpen, setIsAdvancedScannerOpen] = useState(false)
 
   // Keep tempApiUrl in sync with apiUrl prop
   useEffect(() => {
@@ -111,8 +109,25 @@ export function DashboardView({
   const [logsError, setLogsError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("api")
   const [hasLoadedLogs, setHasLoadedLogs] = useState(false)
+  const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true)
+  const [isCategoriesCollapsed, setIsCategoriesCollapsed] = useState(false)
   const { toast } = useToast()
   const { setSearchLoading, setBarcodeLoading } = useLoading()
+
+  // Online/Offline status tracking
+  useEffect(() => {
+    const updateOnlineStatus = () => {
+      setIsOnline(navigator.onLine)
+    }
+
+    window.addEventListener('online', updateOnlineStatus)
+    window.addEventListener('offline', updateOnlineStatus)
+
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus)
+      window.removeEventListener('offline', updateOnlineStatus)
+    }
+  }, [])
 
   // Debounced search with loading states
   useEffect(() => {
@@ -526,16 +541,31 @@ export function DashboardView({
     }
   }, [onRefreshData])
   
-  // Global barcode scanner detection
+  // Enhanced Global barcode scanner detection (works anywhere on page)
   useEffect(() => {
     let barcodeBuffer = "";
     
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       const currentTime = Date.now();
       
+      // Skip if user is typing in search or other input fields (except barcode scanner)
+      const target = event.target as HTMLElement;
+      const isInBarcodeField = target?.id === 'barcode-scanner-input';
+      const isInOtherInput = target?.tagName === 'INPUT' && !isInBarcodeField;
+      
+      // Allow barcode scanner to work globally, but skip if in other inputs
+      if (isInOtherInput) return;
+      
       // If this is likely from a barcode scanner based on typing speed
       const isLikelyScanner = currentTime - lastKeyTime < BARCODE_SPEED_THRESHOLD;
       setLastKeyTime(currentTime);
+      
+      // Build up barcode buffer for rapid keystrokes
+      if (event.key.length === 1 && isLikelyScanner) {
+        barcodeBuffer += event.key;
+        setIsScanning(true);
+        event.preventDefault(); // Prevent input in other fields during scan
+      }
       
       // If there's a long pause, reset the buffer (manual typing)
       if (!isLikelyScanner && barcodeBuffer.length > 0) {
@@ -544,13 +574,21 @@ export function DashboardView({
       }
       
       // Handle Enter key (typical end of barcode scan)
-      if (event.key === 'Enter' && barcodeBuffer.length > 0) {
-        console.log("[Global Scanner] Enter pressed, barcodeBuffer:", barcodeBuffer);
-        // Process barcode scan regardless of focus
-        // Set the barcode input and trigger scan detection
+      if (event.key === 'Enter' && barcodeBuffer.length > 2) {
+        console.log("[Global Scanner] Barcode detected:", barcodeBuffer);
+        event.preventDefault();
+        
+        // Update UI to show what was scanned
         setBarcodeInput(barcodeBuffer);
         setIsScanning(true);
         setIsBarcodeScanned(true);
+        
+        // Focus the barcode input to show the scanned value
+        const barcodeField = document.getElementById('barcode-scanner-input') as HTMLInputElement;
+        if (barcodeField) {
+          barcodeField.focus();
+          barcodeField.select();
+        }
         
         // Process the barcode after a short delay to ensure UI updates
         setTimeout(() => {
@@ -786,17 +824,7 @@ export function DashboardView({
   /**
    * Formats feedback messages for barcode scanning vs manual entry
    */
-  const getScanFeedbackText = (): string => {
-    if (isScanning) {
-      return "Barcode scan detected! Processing item...";
-    } else if (isBarcodeScanned) {
-      return "Barcode scan processed! Item will be added automatically.";
-    } else if (barcodeInput.trim()) {
-      return "Manual entry detected. Press Enter or click Add to add this item.";
-    } else {
-      return "Ready to scan barcode (ITM001, ITM002, etc.) or enter item ID manually.";
-    }
-  }
+
 
   /**
    * Detects whether input is from a barcode scanner or manual typing
@@ -905,51 +933,100 @@ export function DashboardView({
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
-      {/* Left Sidebar */}
-      <div className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-4 space-y-6 sticky top-0 h-screen overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-slate-700 dark:text-slate-300">
-            <Filter className="w-4 h-4" />
-            <span className="font-medium">Filters</span>
-          </div>
-          <div className="flex space-x-1">
-            <Button variant="ghost" size="sm" onClick={() => setIsSettingsOpen(true)} className="p-1">
-              <Settings className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleRefreshData} disabled={isLoadingData} className="p-1">
-              <RefreshCw className={`w-4 h-4 ${isLoadingData ? "animate-spin" : ""}`} />
-            </Button>
+      {/* Modern Sidebar */}
+      <div className="w-72 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 border-r border-slate-200/60 dark:border-slate-700/60 backdrop-blur-sm sticky top-0 h-screen overflow-y-auto custom-scrollbar">
+        {/* Sidebar Header */}
+        <div className="p-6 border-b border-slate-200/60 dark:border-slate-700/60">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-teal-500 rounded-lg flex items-center justify-center shadow-lg">
+                <Filter className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-900 dark:text-slate-100">Controls</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Filter & manage items</p>
+              </div>
+            </div>
+            <div className="flex space-x-1">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setIsSettingsOpen(true)} 
+                className="w-8 h-8 p-0 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 rounded-lg transition-all duration-200"
+              >
+                <Settings className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleRefreshData} 
+                disabled={isLoadingData} 
+                className="w-8 h-8 p-0 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 rounded-lg transition-all duration-200"
+              >
+                <RefreshCw className={`w-4 h-4 text-slate-600 dark:text-slate-400 ${isLoadingData ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
           </div>
         </div>
 
-        <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 bg-slate-50 dark:bg-slate-700/30 p-2 rounded-md">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-1">
-              {isConnected ? (
-                <Wifi className="w-3 h-3 text-green-500" />
-              ) : (
-                <WifiOff className="w-3 h-3 text-orange-500" />
-              )}
-              <span>API Status:</span>
+        {/* Sidebar Content */}
+        <div className="p-6 space-y-8">
+
+          {/* System Status Card */}
+          <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/60 dark:border-slate-700/60 rounded-xl p-4 shadow-sm">
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <div className="w-5 h-5 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-md flex items-center justify-center">
+                  <Wifi className="w-3 h-3 text-white" />
+                </div>
+                System Status
+              </h3>
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-orange-500'}`}></div>
+                    <span className="text-xs text-slate-600 dark:text-slate-400">API</span>
+                  </div>
+                  <Badge 
+                    variant={isConnected ? "default" : "outline"} 
+                    className="text-xs px-2 py-0.5 rounded-full"
+                  >
+                    {isConnected ? "Connected" : "Disconnected"}
+                  </Badge>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                    <span className="text-xs text-slate-600 dark:text-slate-400">Network</span>
+                  </div>
+                  <Badge 
+                    variant={isOnline ? "default" : "outline"} 
+                    className="text-xs px-2 py-0.5 rounded-full"
+                  >
+                    {isOnline ? "Online" : "Offline"}
+                  </Badge>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-600 dark:text-slate-400">Source</span>
+                  <Badge 
+                    variant={dataSource === "api" ? "default" : "outline"} 
+                    className="text-xs px-2 py-0.5 rounded-full"
+                  >
+                    {dataSource === "api" ? "Live" : "Cache"}
+                  </Badge>
+                </div>
+                
+                {lastFetchTime && (
+                  <div className="text-xs text-slate-500 dark:text-slate-500 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                    Updated {lastFetchTime.toLocaleTimeString()}
+                  </div>
+                )}
+              </div>
             </div>
-            <Badge 
-              variant={isConnected ? "default" : "outline"} 
-              className="text-xs"
-            >
-              {isConnected ? "Connected" : "Disconnected"}
-            </Badge>
           </div>
-          <div className="flex items-center justify-between">
-            <span>Data Source:</span>
-            <Badge 
-              variant={dataSource === "api" ? "default" : "outline"} 
-              className="text-xs"
-            >
-              {dataSource === "api" ? "API" : "Cached API"}
-            </Badge>
-          </div>
-          {lastFetchTime && <div>Last updated: {lastFetchTime.toLocaleTimeString()}</div>}
-        </div>
         
         {/* Settings Dialog with Tabs */}
         <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
@@ -1177,124 +1254,144 @@ export function DashboardView({
           </DialogContent>
         </Dialog>
 
-        {/* Categories */}
-        <div className="space-y-3">
-          <h3 className="font-medium text-slate-900 dark:text-slate-100">Categories</h3>
-          <div className="space-y-2">
-            {categories.map((category) => (
-              <Button
-                key={category}
-                variant={selectedCategory === category ? "secondary" : "ghost"}
-                size="sm"
-                className={`w-full justify-start ${
-                  selectedCategory === category
-                    ? "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
-                    : "text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-200 dark:hover:text-slate-100 dark:hover:bg-slate-700"
-                }`}
-                onClick={() => setSelectedCategory(category)}
-              >
-                {category === "all" ? "All Items" : category}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {/* Status Filter */}
-        <div className="space-y-3">
-          <h3 className="font-medium text-slate-900 dark:text-slate-100">Status</h3>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="available" 
-                checked={showAvailable} 
-                onCheckedChange={(checked) => setShowAvailable(checked === true)} 
-              />
-              <label htmlFor="available" className="text-sm dark:text-slate-300">
-                Available
-              </label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="unavailable" 
-                checked={showUnavailable} 
-                onCheckedChange={(checked) => setShowUnavailable(checked === true)} 
-              />
-              <label htmlFor="unavailable" className="text-sm dark:text-slate-300">
-                Unavailable
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* Barcode Scanner */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-medium text-slate-900 dark:text-slate-100">Item Scanner</h3>
-            {isScanning && (
-              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800 animate-pulse">
-                Scanning...
-              </Badge>
-            )}
-          </div>
-          
-          <div className="text-xs bg-slate-100 dark:bg-slate-700 p-2 rounded-md text-slate-600 dark:text-slate-300 space-y-1">
-            <div className="flex items-center">
-              <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
-              <span><strong>Barcode scan:</strong> Items added automatically</span>
-            </div>
-            <div className="flex items-center">
-              <span className="w-3 h-3 bg-teal-500 rounded-full mr-2"></span>
-              <span><strong>Manual entry:</strong> Requires button press</span>
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <div className="relative">
-              <Scan className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${
-                isScanning ? "text-green-500" : "text-slate-400"
-              }`} />
-              <Input
-                placeholder="Scan barcode (ITM001, ITM002...) or enter item ID..."
-                value={barcodeInput}
-                onChange={handleBarcodeInputChange}
-                onKeyPress={handleBarcodeKeyPress}
-                className={`pl-10 ${
-                  isScanning 
-                    ? "border-green-500 ring-1 ring-green-500 dark:border-green-500" 
-                    : ""
-                }`}
-              />
-              {isScanning && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+          {/* Barcode Scanner Card */}
+          <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/60 dark:border-slate-700/60 rounded-xl p-4 shadow-sm">
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <div className="w-5 h-5 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-md flex items-center justify-center">
+                  <Scan className="w-3 h-3 text-white" />
                 </div>
-              )}
+                Quick Scanner
+              </h3>
+              
+              <div className="space-y-3">
+                <Input
+                  id="barcode-scanner-input"
+                  placeholder="Scan or enter item ID..."
+                  value={barcodeInput}
+                  onChange={handleBarcodeInputChange}
+                  onKeyPress={handleBarcodeKeyPress}
+                  className={`font-mono text-sm bg-white/80 dark:bg-slate-700/80 border-slate-200 dark:border-slate-600 rounded-lg transition-all duration-200 ${
+                    isScanning 
+                      ? "border-blue-400 ring-2 ring-blue-100 dark:ring-blue-900/50" 
+                      : "hover:border-slate-300 dark:hover:border-slate-500"
+                  }`}
+                />
+                
+                <Button
+                  size="sm"
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white border-0 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                  onClick={handleBarcodeSubmit}
+                  disabled={!barcodeInput.trim()}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add to Cart
+                </Button>
+                
+                {isScanning && (
+                  <div className="flex items-center justify-center gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
+                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    Scanning detected...
+                  </div>
+                )}
+              </div>
             </div>
-            
-            {/* Only show button if not scanning (for manual entry) */}
-            <Button
-              size="sm"
-              className={`w-full transition-all duration-200 ${
-                isBarcodeScanned
-                  ? "bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
-                  : "bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600"
-              }`}
-              onClick={handleBarcodeSubmit}
-              disabled={!barcodeInput.trim()}
-            >
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Add to Toolbox
-            </Button>
-            
-            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {getScanFeedbackText()}
+          </div>
+
+          {/* Categories Card - Collapsible */}
+          <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/60 dark:border-slate-700/60 rounded-xl p-4 shadow-sm">
+            <div className="space-y-3">
+              <button 
+                onClick={() => setIsCategoriesCollapsed(!isCategoriesCollapsed)}
+                className="w-full flex items-center justify-between group hover:bg-slate-100/50 dark:hover:bg-slate-700/30 -mx-2 -my-1 px-2 py-1 rounded-lg transition-all duration-200"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 bg-gradient-to-br from-purple-400 to-pink-500 rounded-md flex items-center justify-center">
+                    <Package className="w-3 h-3 text-white" />
+                  </div>
+                  <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    Categories
+                  </h3>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                    {categories.length}
+                  </div>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                  isCategoriesCollapsed ? 'rotate-180' : ''
+                }`} />
+              </button>
+              
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                isCategoriesCollapsed ? 'max-h-0 opacity-0' : 'max-h-96 opacity-100'
+              }`}>
+                <div className="space-y-1 pt-1">
+                  {categories.map((category) => (
+                    <button
+                      key={category}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                        selectedCategory === category
+                          ? "bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-100 dark:to-slate-200 text-white dark:text-slate-900 shadow-sm"
+                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
+                      onClick={() => setSelectedCategory(category)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">
+                          {category === "all" ? "All Items" : category}
+                        </span>
+                        {selectedCategory === category && (
+                          <div className="w-2 h-2 rounded-full bg-white dark:bg-slate-900"></div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Availability Filter Card */}
+          <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/60 dark:border-slate-700/60 rounded-xl p-4 shadow-sm">
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <div className="w-5 h-5 bg-gradient-to-br from-emerald-400 to-green-500 rounded-md flex items-center justify-center">
+                  <div className="w-2 h-2 bg-white rounded-full"></div>
+                </div>
+                Availability
+              </h3>
+              
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <Checkbox 
+                    id="available" 
+                    checked={showAvailable} 
+                    onCheckedChange={(checked) => setShowAvailable(checked === true)}
+                    className="border-slate-300 dark:border-slate-600 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                  />
+                  <span className="text-sm text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100 transition-colors">
+                    Available Items
+                  </span>
+                </label>
+                
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <Checkbox 
+                    id="unavailable" 
+                    checked={showUnavailable} 
+                    onCheckedChange={(checked) => setShowUnavailable(checked === true)}
+                    className="border-slate-300 dark:border-slate-600 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                  />
+                  <span className="text-sm text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100 transition-colors">
+                    Out of Stock
+                  </span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
+      <div className="flex-1 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 overflow-y-auto content-scrollbar">
         <div className="p-6">
           {/* Top Controls */}
           <div className="bg-slate-50 dark:bg-slate-900 relative z-10 mb-6">
@@ -1324,16 +1421,6 @@ export function DashboardView({
                   onChange={(e) => setLocalSearchQuery(e.target.value)}
                   className="w-64 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600"
                 />
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAdvancedScannerOpen(true)}
-                  className="flex items-center space-x-2 bg-white dark:bg-slate-800 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                >
-                  <Scan className="w-4 h-4" />
-                  <span>Batch Scanner</span>
-                </Button>
 
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger className="w-40 text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600">
@@ -1592,29 +1679,7 @@ export function DashboardView({
       {/* Enhanced Barcode Scanner Loading Overlay */}
       <BarcodeScanLoader isScanning={isScanning} />
       
-      {/* Advanced Barcode Scanner Dialog */}
-      <Dialog open={isAdvancedScannerOpen} onOpenChange={setIsAdvancedScannerOpen}>
-        <DialogContent className="sm:max-w-6xl max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2">
-              <Scan className="w-5 h-5 text-blue-600" />
-              <span>Advanced Barcode Scanner</span>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-2">
-            <AdvancedBarcodeScanner 
-              products={products}
-              onProductScanned={(product) => {
-                // Product is automatically added to cart by the scanner component
-                toast({
-                  title: "Product Added",
-                  description: `${product.name} has been added to your cart.`,
-                })
-              }}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+
     </div>
   )
 }

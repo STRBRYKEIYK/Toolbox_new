@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import { PageLoader, OperationLoader, ConnectionStatus } from './enhanced-loaders'
+import { PageLoader, OperationLoader } from './enhanced-loaders'
 
 interface LoadingState {
   page: boolean
@@ -132,7 +132,7 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
           {...(loading.operation.message !== undefined && { message: loading.operation.message })}
         />
       )}
-      <ConnectionStatus isOnline={isOnline} />
+
     </LoadingContext.Provider>
   )
 }
