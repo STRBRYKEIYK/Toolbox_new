@@ -1,9 +1,13 @@
 import type React from "react"
 import { useState, useMemo, useEffect, useCallback } from "react"
-import { validateBarcode, validateItemId as validateItemIdFormat, validateSearchQuery } from "@/lib/validation"
+import { validateSearchQuery } from "@/lib/validation"
+import { 
+  processBarcodeInput,
+  type Product
+} from "@/lib/barcode-scanner"
 import { Filter, Grid, List, Scan, ChevronDown, RefreshCw, Settings, Wifi, Download, FileText, FileSpreadsheet, Code, Plus, Package } from "lucide-react"
 import { useLoading } from "@/components/loading-context"
-import { SearchLoader, BarcodeScanLoader } from "@/components/enhanced-loaders"
+import { SearchLoader } from "@/components/enhanced-loaders"
 import { OfflineStatusPanel } from "@/components/offline-status"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { exportToCSV, exportToXLSX, exportToJSON, prepareExportData, exportLogsToXLSX } from "@/lib/export-utils"
 import { EnhancedItemCard } from "@/components/enhanced-item-card"
 import { BulkOperationsBar, useBulkSelection } from "@/components/bulk-operations"
-import type { Product } from "@/app/page"
+
 
 interface DashboardViewProps {
   onAddToCart: (product: Product, quantity?: number) => void
@@ -92,9 +96,7 @@ export function DashboardView({
   const [barcodeInput, setBarcodeInput] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [isScanning, setIsScanning] = useState(false)
-  const [isBarcodeScanned, setIsBarcodeScanned] = useState(false)
-  const [lastKeyTime, setLastKeyTime] = useState<number>(0)
+
   const [isExporting, setIsExporting] = useState(false)
   const [logs, setLogs] = useState<any[]>([])
   const [useEnhancedCards] = useState(true)
@@ -112,7 +114,7 @@ export function DashboardView({
   const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true)
   const [isCategoriesCollapsed, setIsCategoriesCollapsed] = useState(false)
   const { toast } = useToast()
-  const { setSearchLoading, setBarcodeLoading } = useLoading()
+  const { setSearchLoading } = useLoading()
 
   // Online/Offline status tracking
   useEffect(() => {
@@ -146,13 +148,10 @@ export function DashboardView({
     }
   }, [localSearchQuery, setSearchLoading, setIsSearching])
 
-  // Barcode scanning loading integration
-  useEffect(() => {
-    setBarcodeLoading(isScanning)
-  }, [isScanning, setBarcodeLoading])
+
 
   const ITEMS_PER_PAGE = 50
-  const BARCODE_SPEED_THRESHOLD = 100 // ms between characters to detect barcode scanner vs manual typing
+
 
   // Check if localStorage is available (not server-side rendering)
   const isLocalStorageAvailable = () => {
@@ -503,146 +502,41 @@ export function DashboardView({
     }
   }, [parentProducts])
 
-  /**
-   * Validates that the entered value corresponds to a valid item ID
-   * Supports both direct item IDs and barcode format (ITM001, ITM002, etc.)
-   * @returns The found product or null if not found
-   */
-  const validateItemId = (value: string): Product | null => {
-    // First, validate the input format
-    const validation = validateItemIdFormat(value);
-    if (!validation.isValid) {
-      console.warn("[validateItemId] Input validation failed:", validation.error);
-      return null;
-    }
 
-    const cleanValue = validation.value!;
-    let searchId = cleanValue;
-    console.log("[validateItemId] Input:", value, "-> cleaned:", cleanValue, "-> initial searchId:", searchId);
-
-    // Check if it's a barcode format (ITM followed by digits)
-    const barcodeMatch = cleanValue.match(/^ITM(\d+)$/i);
-    if (barcodeMatch && barcodeMatch[1]) {
-      // Convert barcode digits to number (removes leading zeros)
-      const itemNumber = parseInt(barcodeMatch[1], 10);
-      searchId = itemNumber.toString();
-      console.log("[validateItemId] Barcode detected:", cleanValue, "-> extracted:", barcodeMatch[1], "-> parsed:", itemNumber, "-> searchId:", searchId);
-    }
-
-    // Search for product by exact ID match
-    const foundProduct = products.find((p) => p.id === searchId);
-    console.log("[validateItemId] Searching for item ID:", searchId, "-> found:", foundProduct ? foundProduct.name : "NOT FOUND");
-
-    return foundProduct || null;
-  };
   useEffect(() => {
     if (onRefreshData) {
       onRefreshData(handleRefreshData)
     }
   }, [onRefreshData])
   
-  // Enhanced Global barcode scanner detection (works anywhere on page)
-  useEffect(() => {
-    let barcodeBuffer = "";
+  // Simple barcode processing function
+  const processBarcodeSubmit = useCallback((barcodeValue: string) => {
+    if (!barcodeValue.trim()) return;
     
-    const handleGlobalKeyDown = (event: KeyboardEvent) => {
-      const currentTime = Date.now();
-      
-      // Skip if user is typing in search or other input fields (except barcode scanner)
-      const target = event.target as HTMLElement;
-      const isInBarcodeField = target?.id === 'barcode-scanner-input';
-      const isInOtherInput = target?.tagName === 'INPUT' && !isInBarcodeField;
-      
-      // Allow barcode scanner to work globally, but skip if in other inputs
-      if (isInOtherInput) return;
-      
-      // If this is likely from a barcode scanner based on typing speed
-      const isLikelyScanner = currentTime - lastKeyTime < BARCODE_SPEED_THRESHOLD;
-      setLastKeyTime(currentTime);
-      
-      // Build up barcode buffer for rapid keystrokes
-      if (event.key.length === 1 && isLikelyScanner) {
-        barcodeBuffer += event.key;
-        setIsScanning(true);
-        event.preventDefault(); // Prevent input in other fields during scan
-      }
-      
-      // If there's a long pause, reset the buffer (manual typing)
-      if (!isLikelyScanner && barcodeBuffer.length > 0) {
-        barcodeBuffer = "";
-        setIsScanning(false);
-      }
-      
-      // Handle Enter key (typical end of barcode scan)
-      if (event.key === 'Enter' && barcodeBuffer.length > 2) {
-        console.log("[Global Scanner] Barcode detected:", barcodeBuffer);
-        event.preventDefault();
-        
-        // Update UI to show what was scanned
-        setBarcodeInput(barcodeBuffer);
-        setIsScanning(true);
-        setIsBarcodeScanned(true);
-        
-        // Focus the barcode input to show the scanned value
-        const barcodeField = document.getElementById('barcode-scanner-input') as HTMLInputElement;
-        if (barcodeField) {
-          barcodeField.focus();
-          barcodeField.select();
-        }
-        
-        // Process the barcode after a short delay to ensure UI updates
-        setTimeout(() => {
-          const foundProduct = validateItemId(barcodeBuffer);
-          
-          if (foundProduct) {
-            console.log("[Global Scanner] Adding item:", foundProduct.name);
-            onAddToCart(foundProduct);
-            toast({
-              title: "Item Added",
-              description: `${foundProduct.name} has been added to your toolbox`,
-            });
-          } else {
-            console.log("[Global Scanner] Item not found for:", barcodeBuffer);
-            toast({
-              title: "Item Not Found",
-              description: `No item found with ID: ${barcodeBuffer}`,
-              variant: "destructive",
-            });
-          }
-          
-          // Reset state
-          setBarcodeInput("");
-          setIsScanning(false);
-          setIsBarcodeScanned(false);
-        }, 1000);
-        
-        // Reset buffer and prevent default Enter behavior
-        barcodeBuffer = "";
-        event.preventDefault();
-        return;
-      }
-      
-      // Only add printable characters to buffer
-      if (event.key.length === 1 && /[\w\d]/.test(event.key)) {
-        barcodeBuffer += event.key;
-        
-        if (isLikelyScanner) {
-          // Don't set scanning UI unless we have multiple chars (to avoid false positives)
-          if (barcodeBuffer.length > 1) {
-            setIsScanning(true);
-          }
-        }
-      }
-    };
+    console.log("[Barcode Scanner] Processing:", barcodeValue);
     
-    // Add global listener
-    document.addEventListener('keydown', handleGlobalKeyDown);
+    const result = processBarcodeInput(barcodeValue, products);
     
-    // Cleanup
-    return () => {
-      document.removeEventListener('keydown', handleGlobalKeyDown);
-    };
-  }, [lastKeyTime, onAddToCart, toast]);
+    if (result.success && result.product) {
+      console.log("[Barcode Scanner] Found item:", result.product.name);
+      onAddToCart(result.product);
+      
+      toast({
+        title: "✅ Item Added Successfully",
+        description: `${result.product.name} (${barcodeValue}) added to cart`,
+      });
+      
+      // Clear input after success
+      setBarcodeInput("");
+    } else {
+      console.log("[Barcode Scanner] Error:", result.error);
+      toast({
+        title: "❌ Item Not Found",
+        description: result.error || `Barcode ${barcodeValue} not found in inventory`,
+        variant: "destructive",
+      });
+    }
+  }, [products, onAddToCart, toast]);
 
   // Update local search when header search changes
   useEffect(() => {
@@ -692,39 +586,18 @@ export function DashboardView({
     }, 500)
   }, [tempApiUrl, onApiUrlChange]) // Dependencies are stable
 
+  // Handle barcode input submission
   const handleBarcodeSubmit = useCallback(() => {
-    console.log("[Manual Submit] Submitting barcodeInput:", barcodeInput)
-    setIsScanning(false)
-    
-    if (!barcodeInput.trim()) {
-      toast({
-        title: "Invalid Item ID",
-        description: "Please enter a valid item ID or scan a barcode",
-        variant: "destructive",
-      })
-      return
-    }
+    processBarcodeSubmit(barcodeInput)
+  }, [barcodeInput, processBarcodeSubmit])
 
-    // Validate the item ID
-    const foundProduct = validateItemId(barcodeInput)
-
-    if (foundProduct) {
-      console.log("[Manual Submit] Adding item:", foundProduct.name)
-      onAddToCart(foundProduct)
-      setBarcodeInput("")
-      setIsBarcodeScanned(false)
-      toast({
-        title: "Item Added",
-        description: `${foundProduct.name} has been added to your toolbox`,
-      })
-    } else {
-      toast({
-        title: "Item Not Found",
-        description: `No item found with ID: ${barcodeInput}`,
-        variant: "destructive",
-      })
+  // Handle Enter key in barcode input
+  const handleBarcodeKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleBarcodeSubmit()
     }
-  }, [barcodeInput, toast, onAddToCart, validateItemId])
+  }, [handleBarcodeSubmit])
 
   // Filter and sort products
   const { paginatedProducts, totalFilteredCount, hasMorePages } = useMemo(() => {
@@ -826,16 +699,7 @@ export function DashboardView({
    */
 
 
-  /**
-   * Detects whether input is from a barcode scanner or manual typing
-   * based on the timing between keystrokes
-   */
-  const detectScanMethod = (currentTime: number): boolean => {
-    // If time between keystrokes is less than threshold, likely a scanner
-    const isScanner = currentTime - lastKeyTime < BARCODE_SPEED_THRESHOLD;
-    setLastKeyTime(currentTime);
-    return isScanner;
-  }
+
 
   /**
    * Handles the barcode input change
@@ -843,65 +707,12 @@ export function DashboardView({
    */
   const handleBarcodeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    
-    // Validate barcode input
-    const barcodeValidation = validateBarcode(value);
-    if (value && !barcodeValidation.isValid) {
-      console.warn("[handleBarcodeInputChange] Invalid barcode format:", barcodeValidation.error);
-      // Still allow input for partial typing, but don't process
-    }
-    
     setBarcodeInput(value);
-    
-    // Only process valid barcode formats
-    if (barcodeValidation.isValid) {
-      // Detect if this is likely from a scanner based on typing speed
-      const currentTime = Date.now();
-      const isLikelyScanner = detectScanMethod(currentTime);
-      
-      // Only set scanning indicator if the input is fast enough to be from a scanner
-      // and there are multiple characters
-      if (isLikelyScanner && value.length > 1) {
-        setIsScanning(true);
-        setIsBarcodeScanned(true);
-      } else {
-        setIsBarcodeScanned(false);
-      }
-    }
   };
 
   // handleBarcodeSubmit is defined above with useCallback
 
-  /**
-   * Handles key presses in the barcode input field
-   * Auto-submits on Enter key
-   */
-  const handleBarcodeKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleBarcodeSubmit()
-      e.preventDefault()
-    }
-  }
-  
-  /**
-   * Effect to automatically submit when a barcode is scanned
-   * Only triggers when input is determined to be from a scanner
-   */
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    
-    if (isScanning && isBarcodeScanned && barcodeInput.trim()) {
-      // Short delay to ensure complete barcode is captured
-      timer = setTimeout(() => {
-        console.log("[Dashboard] Auto-adding item from barcode scan:", barcodeInput);
-        handleBarcodeSubmit();
-      }, 50);
-    }
-    
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [barcodeInput, isScanning, isBarcodeScanned]);
+
 
 
   
@@ -1261,21 +1072,21 @@ export function DashboardView({
                 <div className="w-5 h-5 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-md flex items-center justify-center">
                   <Scan className="w-3 h-3 text-white" />
                 </div>
-                Quick Scanner
+                Barcode Scanner
               </h3>
               
               <div className="space-y-3">
+                <div className="text-xs text-slate-600 dark:text-slate-400 bg-blue-50/80 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
+                  📱 Click input field first, then scan Code-128 barcode (ITM001, ITM004, etc.)
+                </div>
+                
                 <Input
                   id="barcode-scanner-input"
-                  placeholder="Scan or enter item ID..."
+                  placeholder="Click here first, then scan ITM001, ITM004..."
                   value={barcodeInput}
                   onChange={handleBarcodeInputChange}
                   onKeyPress={handleBarcodeKeyPress}
-                  className={`font-mono text-sm bg-white/80 dark:bg-slate-700/80 border-slate-200 dark:border-slate-600 rounded-lg transition-all duration-200 ${
-                    isScanning 
-                      ? "border-blue-400 ring-2 ring-blue-100 dark:ring-blue-900/50" 
-                      : "hover:border-slate-300 dark:hover:border-slate-500"
-                  }`}
+                  className="font-mono text-sm bg-white/80 dark:bg-slate-700/80 border-slate-200 dark:border-slate-600 rounded-lg transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/50"
                 />
                 
                 <Button
@@ -1288,12 +1099,7 @@ export function DashboardView({
                   Add to Cart
                 </Button>
                 
-                {isScanning && (
-                  <div className="flex items-center justify-center gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-900/20 px-3 py-2 rounded-lg">
-                    <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    Scanning detected...
-                  </div>
-                )}
+
               </div>
             </div>
           </div>
@@ -1676,8 +1482,7 @@ export function DashboardView({
         </div>
       </div>
       
-      {/* Enhanced Barcode Scanner Loading Overlay */}
-      <BarcodeScanLoader isScanning={isScanning} />
+
       
 
     </div>

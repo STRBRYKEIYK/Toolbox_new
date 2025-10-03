@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { useAdvancedBarcodeScanner, BatchScanResult } from '@/hooks/use-advanced-barcode-scanner'
 import { useCartPersistence } from '@/hooks/use-cart-persistence'
-import type { Product } from '@/app/page'
+import type { Product } from '@/lib/barcode-scanner'
 
 interface AdvancedBarcodeScannerProps {
   products: Product[]

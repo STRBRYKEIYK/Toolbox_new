@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { Product } from '@/app/page';
+import type { Product } from '@/lib/barcode-scanner';
 
 export interface ExportOptions {
   filename?: string;
@@ -211,7 +211,7 @@ export const prepareExportData = (
 
 // Export logs specifically (array of normalized log objects)
 export const exportLogsToXLSX = (logs: Array<any>, options: ExportOptions = {}) => {
-  const { filename = 'logs-export', includeMetadata = false } = options;
+  const { filename = 'logs-export' } = options;
 
   // Normalize logs to rows with specific columns
   const rows = logs.map((l) => ({

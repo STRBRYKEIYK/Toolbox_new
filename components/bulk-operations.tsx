@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { useLoading } from '@/components/loading-context'
 import { InlineLoader } from '@/components/enhanced-loaders'
-import type { Product } from '@/app/page'
+import type { Product } from '@/lib/barcode-scanner'
 
 interface BulkOperationsBarProps {
   selectedItems: string[]

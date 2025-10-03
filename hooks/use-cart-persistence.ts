@@ -16,7 +16,7 @@ import {
   exportCartData,
   importCartData
 } from '@/lib/cart-persistence'
-import type { Product } from '@/app/page'
+import type { Product } from '@/lib/barcode-scanner'
 import { useToast } from '@/hooks/use-toast'
 
 export interface UseCartPersistenceReturn {

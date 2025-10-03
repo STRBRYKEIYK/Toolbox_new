@@ -6,12 +6,26 @@ export const BarcodeSchema = z.string()
   .min(1, "Barcode cannot be empty")
   .max(50, "Barcode too long")
   .regex(/^[A-Za-z0-9]+$/, "Barcode can only contain letters and numbers")
+  .refine(
+    (val) => {
+      // Allow ITM format (ITM001, ITM024, etc.) or plain numbers
+      return /^ITM\d{1,6}$/i.test(val) || /^\d{1,6}$/.test(val) || /^[A-Za-z0-9]{1,20}$/.test(val);
+    },
+    "Invalid barcode format. Expected ITM followed by numbers or plain item ID"
+  )
 
 export const ItemIdSchema = z.string()
   .trim()
   .min(1, "Item ID cannot be empty")
   .max(20, "Item ID too long")
   .regex(/^[A-Za-z0-9]+$/, "Item ID can only contain letters and numbers")
+  .refine(
+    (val) => {
+      // Allow ITM format, plain numbers, or alphanumeric IDs
+      return /^ITM\d{1,6}$/i.test(val) || /^\d{1,6}$/.test(val) || /^[A-Za-z0-9]{1,20}$/.test(val);
+    },
+    "Invalid item ID format"
+  )
 
 export const QuantitySchema = z.number()
   .int("Quantity must be a whole number")

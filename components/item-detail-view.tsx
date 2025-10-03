@@ -5,7 +5,7 @@ import { ArrowLeft, Plus, Minus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import type { Product } from "@/app/page"
+import type { Product } from "@/lib/barcode-scanner"
 
 interface ItemDetailViewProps {
   product: Product

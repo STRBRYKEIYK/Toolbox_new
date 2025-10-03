@@ -10,6 +10,7 @@ import { EnhancedToaster } from "@/components/enhanced-toaster"
 import { useCartPersistence } from "@/hooks/use-cart-persistence"
 import { useOfflineManager } from "@/hooks/use-offline-manager"
 import { apiService, DEFAULT_API_CONFIG } from "@/lib/api-config"
+import type { Product } from "@/lib/barcode-scanner"
 
 export type ViewType = "dashboard" | "cart" | "item-detail"
 
@@ -24,15 +25,7 @@ export interface CartItem {
   status: "in-stock" | "low-stock" | "out-of-stock"
 }
 
-export interface Product {
-  id: string
-  name: string
-  brand: string
-  itemType: string
-  location: string
-  balance: number
-  status: "in-stock" | "low-stock" | "out-of-stock"
-}
+
 
 export default function HomePage() {
   const [isAppStarted, setIsAppStarted] = useState(false)

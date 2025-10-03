@@ -3,7 +3,7 @@
  * Enables employees to maintain cart state across browser sessions
  */
 
-import type { Product } from '@/app/page'
+import type { Product } from '@/lib/barcode-scanner'
 
 export interface CartItem {
   id: string

@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ShoppingCart, Eye, Package, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
-import type { Product } from '@/app/page'
+import type { Product } from '@/lib/barcode-scanner'
 
 interface EnhancedItemCardProps {
   product: Product
