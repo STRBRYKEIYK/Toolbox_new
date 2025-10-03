@@ -121,10 +121,13 @@ export function useCartPersistence(): UseCartPersistenceReturn {
         setCartState(updatedState)
         setHasUnsavedChanges(false) // persistAddToCart already saves
         
-        toast({
-          title: "Added to Cart",
-          description: `${product.name} (${quantity}) added to cart`,
-        })
+        // Only show toast for manual adds, not for barcode scans
+        if (!notes || !notes.includes('barcode')) {
+          toast({
+            title: "Added to Cart",
+            description: `${product.name} (${quantity}) added to cart`,
+          })
+        }
         
         return true
       }

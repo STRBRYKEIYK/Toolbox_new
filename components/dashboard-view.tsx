@@ -27,7 +27,7 @@ import { BulkOperationsBar, useBulkSelection } from "@/components/bulk-operation
 
 
 interface DashboardViewProps {
-  onAddToCart: (product: Product, quantity?: number) => void
+  onAddToCart: (product: Product, quantity?: number, isFromBarcode?: boolean) => void
   onViewItem: (product: Product) => void
   searchQuery?: string
   onRefreshData?: (refreshFunction: () => void) => void
@@ -212,7 +212,7 @@ export function DashboardView({
     }
   };
 
-  const fetchProductsFromAPI = async () => {
+  const fetchProductsFromAPI = async (showSuccessToast = true) => {
     try {
       setIsLoadingData(true)
       console.log("[v0] Attempting to fetch products from API...")
@@ -249,48 +249,65 @@ export function DashboardView({
         })(),
       }))
 
-      setProducts(transformedProducts)
-      setDataSource("api")
-      setLastFetchTime(new Date())
-      
-      // Save the API data to localStorage for offline use
-      saveProductsToLocalStorage(transformedProducts);
+      // Only update state if we got new/different data
+      const hasNewData = JSON.stringify(transformedProducts) !== JSON.stringify(products);
+      if (hasNewData) {
+        setProducts(transformedProducts)
+        setDataSource("api")
+        setLastFetchTime(new Date())
+        
+        // Save the API data to localStorage for offline use
+        saveProductsToLocalStorage(transformedProducts);
 
-      toast({
-        title: "Data Loaded",
-        description: `Successfully loaded ${transformedProducts.length} items from API`,
-      })
+        if (showSuccessToast) {
+          toast({
+            title: "Data Loaded",
+            description: `Successfully loaded ${transformedProducts.length} items from API`,
+          })
+        }
+      } else {
+        console.log("[v0] API returned same data, no update needed");
+        if (showSuccessToast) {
+          toast({
+            title: "Data Up to Date",
+            description: `${transformedProducts.length} items are already current`,
+          })
+        }
+      }
     } catch (error) {
       console.error("[v0] Failed to fetch from API, trying to use cached data:", error)
       
-      // Try to get data from localStorage first
-      const { products: cachedProducts, timestamp } = loadProductsFromLocalStorage();
-      
-      if (cachedProducts && cachedProducts.length > 0) {
-        // Use cached API data if available
-        setProducts(cachedProducts)
-        setDataSource("cached") // Mark as cached API data
-        setLastFetchTime(timestamp)
+      // Only show fallback logic if we don't already have products loaded
+      if (products.length === 0) {
+        // Try to get data from localStorage first
+        const { products: cachedProducts, timestamp } = loadProductsFromLocalStorage();
         
-        const timeDiff = timestamp ? Math.round((new Date().getTime() - timestamp.getTime()) / (1000 * 60 * 60)) : null;
-        const timeMsg = timeDiff ? ` (from ${timeDiff} hour${timeDiff === 1 ? '' : 's'} ago)` : '';
-        
-        toast({
-          title: "Using Cached API Data",
-          description: `API unavailable. Using previously downloaded data${timeMsg}`,
-          variant: "default",
-        })
-      } else {
-        // No cached data available and API is down - show empty state
-        console.error("[v0] No cached data available and API is down");
-        setProducts([])
-        setDataSource("cached")
-        
-        toast({
-          title: "No Data Available",
-          description: "API unavailable and no previously downloaded data found. Please restore connection to load data.",
-          variant: "destructive",
-        })
+        if (cachedProducts && cachedProducts.length > 0) {
+          // Use cached API data if available
+          setProducts(cachedProducts)
+          setDataSource("cached") // Mark as cached API data
+          setLastFetchTime(timestamp)
+          
+          const timeDiff = timestamp ? Math.round((new Date().getTime() - timestamp.getTime()) / (1000 * 60 * 60)) : null;
+          const timeMsg = timeDiff ? ` (from ${timeDiff} hour${timeDiff === 1 ? '' : 's'} ago)` : '';
+          
+          toast({
+            title: "Using Cached API Data",
+            description: `API unavailable. Using previously downloaded data${timeMsg}`,
+            variant: "default",
+          })
+        } else {
+          // No cached data available and API is down - show empty state
+          console.error("[v0] No cached data available and API is down");
+          setProducts([])
+          setDataSource("cached")
+          
+          toast({
+            title: "No Data Available",
+            description: "API unavailable and no previously downloaded data found. Please restore connection to load data.",
+            variant: "destructive",
+          })
+        }
       }
     } finally {
       setIsLoadingData(false)
@@ -484,6 +501,12 @@ export function DashboardView({
       return;
     }
     
+    // Prevent duplicate API calls by checking if data is already loading or loaded
+    if (products.length > 0) {
+      console.log("[v0] Products already loaded, skipping fetch");
+      return;
+    }
+    
     // Try to load cached data immediately while we wait for API response
     const { products: cachedProducts, timestamp } = loadProductsFromLocalStorage();
     
@@ -494,13 +517,19 @@ export function DashboardView({
       setLastFetchTime(timestamp);
       setIsLoadingData(false); // Show cached data immediately
       
-      // Then fetch fresh data from API
-      fetchProductsFromAPI();
+      // Only fetch fresh data if cache is older than 5 minutes
+      const cacheAge = timestamp ? (Date.now() - timestamp.getTime()) / (1000 * 60) : Infinity;
+      if (cacheAge > 5) {
+        console.log("[v0] Cache is old, fetching fresh data");
+        fetchProductsFromAPI(false); // Don't show toast for background refresh
+      } else {
+        console.log("[v0] Cache is fresh, skipping API call");
+      }
     } else {
       // No cached data, just fetch from API
-      fetchProductsFromAPI();
+      fetchProductsFromAPI(true); // Show toast for initial load
     }
-  }, [parentProducts])
+  }, [parentProducts, products.length])
 
 
   useEffect(() => {
@@ -519,10 +548,11 @@ export function DashboardView({
     
     if (result.success && result.product) {
       console.log("[Barcode Scanner] Found item:", result.product.name);
-      onAddToCart(result.product);
+      onAddToCart(result.product, 1, true); // Pass true for isFromBarcode
       
+      // Show success feedback for barcode scanning specifically
       toast({
-        title: "✅ Item Added Successfully",
+        title: "✅ Item Scanned & Added",
         description: `${result.product.name} (${barcodeValue}) added to cart`,
       });
       
@@ -572,7 +602,7 @@ export function DashboardView({
 
   // Memoized handlers to prevent unnecessary re-renders
   const handleRefreshData = useCallback(() => {
-    fetchProductsFromAPI()
+    fetchProductsFromAPI(true) // Show toast for manual refresh
   }, []) // fetchProductsFromAPI will be stable
   
   const handleSaveSettings = useCallback(() => {
@@ -582,7 +612,7 @@ export function DashboardView({
     setIsSettingsOpen(false)
     // Refresh data after changing API URL
     setTimeout(() => {
-      fetchProductsFromAPI()
+      fetchProductsFromAPI(true) // Show toast for settings change
     }, 500)
   }, [tempApiUrl, onApiUrlChange]) // Dependencies are stable
 

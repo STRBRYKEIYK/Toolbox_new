@@ -100,13 +100,16 @@ export default function HomePage() {
 
   // Sync persistent cart state with local cart state
   useEffect(() => {
-    if (cartState && cartState.items.length > 0) {
+    if (cartState) {
       // Convert persistent cart items to local cart format
       const localCartItems: CartItem[] = cartState.items.map(item => ({
         ...item.product,
         quantity: item.quantity
       }))
       setCartItems(localCartItems)
+    } else {
+      // Clear local cart when persistent cart is empty
+      setCartItems([])
     }
   }, [cartState])
 
@@ -129,40 +132,30 @@ export default function HomePage() {
     }
   }, [isOffline, products.length, getOfflineData])
 
-  const addToCart = async (product: Product, quantity = 1) => {
-    // Add to persistent storage first
-    const success = await persistAddToCart(product, quantity, `Added from ${currentView}`)
+  const addToCart = async (product: Product, quantity = 1, isFromBarcode = false) => {
+    // Add to persistent storage - this will automatically update cartState via useCartPersistence
+    const notes = isFromBarcode ? `Added via barcode from ${currentView}` : `Added from ${currentView}`
+    const success = await persistAddToCart(product, quantity, notes)
     
-    if (success) {
-      // Update local state for immediate UI feedback
-      setCartItems((prev) => {
-        const existingItem = prev.find((item) => item.id === product.id)
-        if (existingItem) {
-          return prev.map((item) =>
-            item.id === product.id ? { ...item, quantity: Math.min(item.quantity + quantity, product.balance) } : item,
-          )
-        }
-        return [...prev, { ...product, quantity: Math.min(quantity, product.balance) }]
-      })
-    }
+    return success
+    // Note: No need to manually update local state here as the useEffect will sync from cartState
   }
 
   const updateCartItemQuantity = async (id: string, quantity: number) => {
     if (quantity <= 0) {
       // Remove from persistent storage
       await persistRemoveFromCart(id)
-      setCartItems((prev) => prev.filter((item) => item.id !== id))
     } else {
       // Update in persistent storage
       await persistUpdateQuantity(id, quantity)
-      setCartItems((prev) => prev.map((item) => (item.id === id ? { ...item, quantity } : item)))
     }
+    // Note: No need to manually update local state here as the useEffect will sync from cartState
   }
 
   const removeFromCart = async (id: string) => {
     // Remove from persistent storage
     await persistRemoveFromCart(id)
-    setCartItems((prev) => prev.filter((item) => item.id !== id))
+    // Note: No need to manually update local state here as the useEffect will sync from cartState
   }
 
   const viewItemDetail = (product: Product) => {

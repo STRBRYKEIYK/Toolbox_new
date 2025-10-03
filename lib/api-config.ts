@@ -14,7 +14,7 @@ export const DEFAULT_API_CONFIG: ApiConfig = {
 export const API_ENDPOINTS = {
   items: "/api/items",
   employees: "/api/employees",
-  checkout: "/api/items/checkout",
+  checkout: "/api/items/checkout", // Bulk checkout endpoint
   transactions: "/api/employeelogs",
 } as const
 
@@ -393,7 +393,7 @@ export class ApiService {
 
         console.log("[v0] Attempting bulk checkout:", checkoutPayload)
 
-        // Fixed: Use the correct checkout endpoint from the server code
+        // Fixed: Use the correct bulk checkout endpoint
         const checkoutResponse = await fetch(`${this.config.baseUrl}/api/items/checkout`, {
           method: "POST",
           headers: {
@@ -433,7 +433,7 @@ export class ApiService {
 
           console.log(`[v0] Recording item ${item.item_no || item.id} (${item.item_name || item.name || 'Unknown'}) going out:`, itemOutPayload)
 
-          const response = await fetch(`${this.config.baseUrl}/api/items/${item.item_no || item.id}/out`, {
+          const response = await fetch(`${this.config.baseUrl}/api/items/stock/${item.item_no || item.id}/out`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
