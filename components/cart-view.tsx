@@ -13,12 +13,7 @@ import { CartRecoveryPanel, CartStatusIndicator } from "./cart-recovery-panel"
 import { apiService } from "@/lib/api_service"
 import { useToast } from "@/hooks/use-toast"
 import type { CartItem } from "@/app/page"
-
-// Define the Employee type if not already imported
-type Employee = {
-  id: number
-  name?: string
-}
+import type { Employee } from "@/lib/Services/employees.service"
 
 interface CartViewProps {
   items: CartItem[]
@@ -115,15 +110,57 @@ export function CartView({ items, onUpdateQuantity, onRemoveItem, onReturnToBrow
           await apiService.commitItemChanges(itemUpdates)
           console.log("[v0] Successfully committed changes to API")
 
-          // Try to log the transaction for audit trail
+          // Try to log the transaction for audit trail with complete details
           try {
+            const enhancedItems = items.map(item => ({
+              id: item.id,
+              name: item.name,
+              brand: item.brand || 'N/A',
+              itemType: item.itemType || 'N/A',
+              location: item.location || 'N/A',
+              quantity: item.quantity,
+              originalBalance: item.balance,
+              newBalance: Math.max(0, item.balance - item.quantity)
+            }))
+
+            // Create concise details format (max 255 chars for database)
+            let detailsText = `Checkout: ${totalItems} items - `
+            
+            if (enhancedItems.length <= 2) {
+              // Very short list: show full details
+              detailsText += enhancedItems.map(item => 
+                `${item.name} x${item.quantity} (${item.brand})`
+              ).join(', ')
+            } else if (enhancedItems.length <= 4) {
+              // Short list: show names and quantities only
+              detailsText += enhancedItems.map(item => 
+                `${item.name} x${item.quantity}`
+              ).join(', ')
+            } else {
+              // Long list: show count by item name only
+              const itemSummary = enhancedItems.reduce((acc, item) => {
+                acc[item.name] = (acc[item.name] || 0) + item.quantity
+                return acc
+              }, {} as Record<string, number>)
+              
+              detailsText += Object.entries(itemSummary)
+                .map(([item, qty]) => `${item} x${qty}`)
+                .join(', ')
+            }
+
+            // Ensure details fit in 255 characters
+            if (detailsText.length > 255) {
+              detailsText = detailsText.substring(0, 252) + '...'
+            }
+
+            const now = new Date()
             await apiService.logTransaction({
-              userId: employee.id.toString(),
-              username: employee.name ?? "N/A",
-              items: itemUpdates,
-              totalItems,
-              timestamp: new Date().toISOString(),
+              username: employee.fullName,
+              details: detailsText,
+              log_date: now.toISOString().split('T')[0] || '', // YYYY-MM-DD
+              log_time: now.toTimeString().split(' ')[0] || ''  // HH:MM:SS
             })
+            console.log("[v0] Successfully logged enhanced transaction details")
           } catch (transactionError) {
             console.log("[v0] Transaction logging failed (non-critical):", transactionError)
           }

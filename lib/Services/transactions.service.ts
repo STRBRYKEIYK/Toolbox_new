@@ -2,6 +2,38 @@ import type { ApiConfig, TransactionFilters, TransactionResponse, TransactionSta
 import { API_ENDPOINTS } from '../api-config'
 
 /**
+ * Transaction Log Data interface matching the database schema
+ * Database fields: id (auto), log_date, log_time, username, details, created_at (auto)
+ */
+export interface TransactionLogData {
+  username: string
+  details: string
+  log_date?: string  // YYYY-MM-DD format, optional (database defaults to curdate())
+  log_time?: string  // HH:MM:SS format, optional (database defaults to curtime())
+}
+
+/**
+ * Internal interface for enhanced logging with full item details
+ * Used internally before converting to TransactionLogData
+ */
+export interface EnhancedTransactionData {
+  userId: string
+  items: Array<{
+    id: string
+    name: string
+    brand?: string
+    itemType?: string
+    location?: string
+    quantity: number
+    originalBalance?: number
+    newBalance?: number
+  }>
+  username: string
+  totalItems: number
+  timestamp: string
+}
+
+/**
  * Transactions Service
  * Handles all transaction and logging-related API operations
  */
@@ -137,15 +169,12 @@ export class TransactionsService {
   /**
    * Log a transaction to the API
    */
-  async logTransaction(transactionData: {
-    userId: string;
-    items: any[];
-    username: string;
-    totalItems: number;
-    timestamp: string;
-  }): Promise<boolean> {
+  async logTransaction(transactionData: TransactionLogData): Promise<boolean> {
     try {
       console.log("[TransactionsService] Logging transaction to API...")
+      console.log(`[TransactionsService] User: ${transactionData.username}`)
+      console.log(`[TransactionsService] Details: ${transactionData.details}`)
+      console.log(`[TransactionsService] Date/Time: ${transactionData.log_date} ${transactionData.log_time}`)
       
       const response = await fetch(`${this.config.baseUrl}${API_ENDPOINTS.transactions}`, {
         method: "POST",

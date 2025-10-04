@@ -4,6 +4,7 @@ import { TransactionsService } from './Services/transactions.service'
 import { ConnectionService } from './Services/connection.service'
 import type { ApiConfig, TransactionFilters, TransactionResponse, TransactionStats } from './api-config'
 import { DEFAULT_API_CONFIG } from './api-config'
+import type { TransactionLogData } from './Services/transactions.service'
 
 /**
  * API Services
@@ -133,13 +134,7 @@ export class ApiServices {
   /**
    * Log a transaction to the API
    */
-  async logTransaction(transactionData: {
-    userId: string;
-    items: any[];
-    username: string;
-    totalItems: number;
-    timestamp: string;
-  }): Promise<boolean> {
+  async logTransaction(transactionData: TransactionLogData): Promise<boolean> {
     return this.transactionsService.logTransaction(transactionData)
   }
 

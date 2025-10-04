@@ -11,35 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { apiService } from "@/lib/api_service"
 import type { CartItem } from "@/app/page"
-
-interface Employee {
-  id: number
-  fullName: string
-  firstName: string
-  middleName: string
-  lastName: string
-  age: number | null
-  birthDate: string
-  contactNumber: string | null
-  createdAt: string
-  department: string
-  document: string | null
-  email: string
-  hireDate: string
-  idBarcode: string
-  idNumber: string
-  isNewHire: boolean
-  position: string
-  profilePicture: string | null
-  salary: string | null
-  status: string
-  address: string | null
-  civilStatus: string | null
-  pagibigNumber: string | null
-  philhealthNumber: string | null
-  sssNumber: string | null
-  tinNumber: string | null
-}
+import type { Employee } from "@/lib/Services/employees.service"
 
 interface CheckoutModalProps {
   isOpen: boolean
@@ -181,30 +153,10 @@ export function CheckoutModal({ isOpen, onClose, items, onConfirmCheckout, isCom
     }
 
     try {
-      // Log the transaction to employee logs
-      const transactionData = {
-        username: selectedEmployee.fullName, // Use email or ID as username
-        details: `Checkout - ${totalItems}x items (${items.map(item => `${item.name}(${item.quantity || 1})`).join(', ')})`,
-        log_date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-        log_time: new Date().toTimeString().split(' ')[0] // HH:MM:SS
-      }
-
-      console.log("[CheckoutModal] Logging transaction:", transactionData)
-
-      // Save to employee logs using the new service method
-      try {
-        await apiService.logTransaction({
-          userId: selectedEmployee.id?.toString() || selectedEmployee.fullName,
-          items: items,
-          username: selectedEmployee.fullName,
-          totalItems: totalItems,
-          timestamp: new Date().toISOString()
-        })
-      } catch (logError) {
-        console.warn("[CheckoutModal] Failed to log transaction (non-critical):", logError)
-      }
-
+      console.log("[CheckoutModal] Processing checkout for employee:", selectedEmployee.fullName)
+      
       // Pass the employee object directly (not wrapped in userId)
+      // Note: Actual logging will happen in cart-view.tsx to avoid duplicates
       onConfirmCheckout(selectedEmployee)
     } catch (error) {
       console.error("[CheckoutModal] Failed to log transaction:", error)

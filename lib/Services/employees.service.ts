@@ -2,6 +2,38 @@ import type { ApiConfig } from '../api-config'
 import { API_ENDPOINTS } from '../api-config'
 
 /**
+ * Employee interface - represents employee data structure
+ */
+export interface Employee {
+  id: number
+  fullName: string
+  firstName: string
+  middleName: string
+  lastName: string
+  age: number | null
+  birthDate: string
+  contactNumber: string | null
+  createdAt: string
+  department: string
+  document: string | null
+  email: string
+  hireDate: string
+  idBarcode: string
+  idNumber: string
+  isNewHire: boolean
+  position: string
+  profilePicture: string | null
+  salary: string | null
+  status: string
+  address: string | null
+  civilStatus: string | null
+  pagibigNumber: string | null
+  philhealthNumber: string | null
+  sssNumber: string | null
+  tinNumber: string | null
+}
+
+/**
  * Employees Service
  * Handles all employee-related API operations
  */
