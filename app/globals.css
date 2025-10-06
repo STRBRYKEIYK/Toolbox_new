@@ -1,128 +1,67 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-
-/* Tailwind CSS custom variant directive */
-/* css-disable-next-line unknown-at-rule */
-@custom-variant dark (&:is(.dark *));
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #1f2937;
-  --card: #f1f5f9;
-  --card-foreground: #1f2937;
-  --popover: #ffffff;
-  --popover-foreground: #1f2937;
-  --primary: #1f2937;
-  --primary-foreground: #ffffff;
-  --secondary: #8b5cf6;
-  --secondary-foreground: #ffffff;
-  --muted: #f1f5f9;
-  --muted-foreground: #1f2937;
-  --accent: #8b5cf6;
-  --accent-foreground: #ffffff;
-  --destructive: #ea580c;
-  --destructive-foreground: #ffffff;
-  --border: #6b7280;
-  --input: #f1f5f9;
-  --ring: rgba(139, 92, 246, 0.5);
-  --chart-1: #8b5cf6;
-  --chart-2: #ea580c;
-  --chart-3: #15803d;
-  --chart-4: #f97316;
-  --chart-5: #1f2937;
+  --background: 0 0% 100%;
+  --foreground: 218 11% 12%;
+  --card: 214 32% 94%;
+  --card-foreground: 218 11% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 218 11% 12%;
+  --primary: 218 11% 12%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 258 90% 66%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 214 32% 94%;
+  --muted-foreground: 218 11% 12%;
+  --accent: 258 90% 66%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 18 93% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 9% 46%;
+  --input: 214 32% 94%;
+  --ring: 258 90% 66% / 0.5;
   --radius: 0.5rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #1f2937;
-  --sidebar-primary: #f1f5f9;
-  --sidebar-primary-foreground: #1f2937;
-  --sidebar-accent: #8b5cf6;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #6b7280;
-  --sidebar-ring: rgba(139, 92, 246, 0.5);
+  --chart-1: 258 90% 66%;
+  --chart-2: 18 93% 50%;
+  --chart-3: 142 71% 29%;
+  --chart-4: 22 93% 54%;
+  --chart-5: 218 11% 12%;
 }
 
 .dark {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-  --card: #1e293b;
-  --card-foreground: #f1f5f9;
-  --popover: #1e293b;
-  --popover-foreground: #f1f5f9;
-  --primary: #f1f5f9;
-  --primary-foreground: #0f172a;
-  --secondary: #8b5cf6;
-  --secondary-foreground: #ffffff;
-  --muted: #334155;
-  --muted-foreground: #94a3b8;
-  --accent: #8b5cf6;
-  --accent-foreground: #ffffff;
-  --destructive: #ea580c;
-  --destructive-foreground: #ffffff;
-  --border: #475569;
-  --input: #334155;
-  --ring: rgba(139, 92, 246, 0.5);
-  --sidebar: #1e293b;
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #334155;
-  --sidebar-primary-foreground: #f1f5f9;
-  --sidebar-accent: #8b5cf6;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #475569;
-  --sidebar-ring: rgba(139, 92, 246, 0.5);
-}
-
-/* Tailwind CSS theme directive */
-/* css-disable-next-line unknown-at-rule */
-@theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+  --background: 222 47% 11%;
+  --foreground: 214 32% 94%;
+  --card: 217 33% 17%;
+  --card-foreground: 214 32% 94%;
+  --popover: 217 33% 17%;
+  --popover-foreground: 214 32% 94%;
+  --primary: 214 32% 94%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 258 90% 66%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 215 20% 26%;
+  --muted-foreground: 217 11% 59%;
+  --accent: 258 90% 66%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 18 93% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 215 16% 35%;
+  --input: 215 20% 26%;
+  --ring: 258 90% 66% / 0.5;
+  --chart-1: 258 90% 66%;
+  --chart-2: 18 93% 50%;
+  --chart-3: 142 71% 29%;
+  --chart-4: 22 93% 54%;
+  --chart-5: 214 32% 94%;
 }
 
 @layer base {
   * {
-    /* Tailwind CSS apply directive */
-    /* css-disable-next-line unknown-at-rule */
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
-    /* Tailwind CSS apply directive */
-    /* css-disable-next-line unknown-at-rule */
     @apply bg-background text-foreground;
   }
 }

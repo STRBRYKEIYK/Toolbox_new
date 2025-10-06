@@ -25,7 +25,7 @@ const ThemeProviderContext = React.createContext<ThemeProviderState>(initialStat
 export function ThemeProvider({
   children,
   defaultTheme = "system",
-  storageKey = "vite-ui-theme",
+  storageKey = "toolbox-theme",
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = React.useState<Theme>(() => {
@@ -43,12 +43,23 @@ export function ThemeProvider({
 
     if (theme === "system") {
       const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-
       root.classList.add(systemTheme)
-      return
+      
+      // Listen for system theme changes
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+      const handleChange = (e: MediaQueryListEvent) => {
+        root.classList.remove("light", "dark")
+        root.classList.add(e.matches ? "dark" : "light")
+      }
+      
+      mediaQuery.addEventListener("change", handleChange)
+      return () => {
+        mediaQuery.removeEventListener("change", handleChange)
+      }
     }
 
     root.classList.add(theme)
+    return undefined
   }, [theme])
 
   const value = {

@@ -46,6 +46,23 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Toolbox Inventory" />
         <link rel="apple-touch-icon" href="/placeholder-logo.svg" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const theme = localStorage.getItem('toolbox-theme') || 'system';
+                const root = document.documentElement;
+                
+                if (theme === 'system') {
+                  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                  root.classList.add(systemTheme);
+                } else {
+                  root.classList.add(theme);
+                }
+              } catch (e) {}
+            `,
+          }}
+        />
       </head>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable} bg-background text-foreground`}>
         <ErrorBoundary>
