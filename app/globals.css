@@ -1,60 +1,71 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-:root {
-  --background: 0 0% 100%;
-  --foreground: 218 11% 12%;
-  --card: 214 32% 94%;
-  --card-foreground: 218 11% 12%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 218 11% 12%;
-  --primary: 218 11% 12%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 258 90% 66%;
-  --secondary-foreground: 0 0% 100%;
-  --muted: 214 32% 94%;
-  --muted-foreground: 218 11% 12%;
-  --accent: 258 90% 66%;
-  --accent-foreground: 0 0% 100%;
-  --destructive: 18 93% 50%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 220 9% 46%;
-  --input: 214 32% 94%;
-  --ring: 258 90% 66% / 0.5;
-  --radius: 0.5rem;
-  --chart-1: 258 90% 66%;
-  --chart-2: 18 93% 50%;
-  --chart-3: 142 71% 29%;
-  --chart-4: 22 93% 54%;
-  --chart-5: 218 11% 12%;
+@variant dark (.dark &);
+
+@theme {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  
+  /* Light mode colors */
+  --color-background: #ffffff;
+  --color-foreground: #1f2937;
+  --color-card: #f1f5f9;
+  --color-card-foreground: #1f2937;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1f2937;
+  --color-primary: #1f2937;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #8b5cf6;
+  --color-secondary-foreground: #ffffff;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #6b7280;
+  --color-accent: #8b5cf6;
+  --color-accent-foreground: #ffffff;
+  --color-destructive: #ea580c;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #e5e7eb;
+  --color-input: #f1f5f9;
+  --color-ring: #8b5cf6;
+  --color-chart-1: #8b5cf6;
+  --color-chart-2: #ea580c;
+  --color-chart-3: #15803d;
+  --color-chart-4: #f97316;
+  --color-chart-5: #1f2937;
+  
+  --radius-sm: calc(0.5rem - 4px);
+  --radius-md: calc(0.5rem - 2px);
+  --radius-lg: 0.5rem;
+  --radius-xl: calc(0.5rem + 4px);
 }
 
 .dark {
-  --background: 222 47% 11%;
-  --foreground: 214 32% 94%;
-  --card: 217 33% 17%;
-  --card-foreground: 214 32% 94%;
-  --popover: 217 33% 17%;
-  --popover-foreground: 214 32% 94%;
-  --primary: 214 32% 94%;
-  --primary-foreground: 222 47% 11%;
-  --secondary: 258 90% 66%;
-  --secondary-foreground: 0 0% 100%;
-  --muted: 215 20% 26%;
-  --muted-foreground: 217 11% 59%;
-  --accent: 258 90% 66%;
-  --accent-foreground: 0 0% 100%;
-  --destructive: 18 93% 50%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 215 16% 35%;
-  --input: 215 20% 26%;
-  --ring: 258 90% 66% / 0.5;
-  --chart-1: 258 90% 66%;
-  --chart-2: 18 93% 50%;
-  --chart-3: 142 71% 29%;
-  --chart-4: 22 93% 54%;
-  --chart-5: 214 32% 94%;
+  @theme {
+    /* Dark mode colors */
+    --color-background: #0f172a;
+    --color-foreground: #f1f5f9;
+    --color-card: #1e293b;
+    --color-card-foreground: #f1f5f9;
+    --color-popover: #1e293b;
+    --color-popover-foreground: #f1f5f9;
+    --color-primary: #f1f5f9;
+    --color-primary-foreground: #0f172a;
+    --color-secondary: #8b5cf6;
+    --color-secondary-foreground: #ffffff;
+    --color-muted: #334155;
+    --color-muted-foreground: #94a3b8;
+    --color-accent: #8b5cf6;
+    --color-accent-foreground: #ffffff;
+    --color-destructive: #ea580c;
+    --color-destructive-foreground: #ffffff;
+    --color-border: #334155;
+    --color-input: #1e293b;
+    --color-ring: #8b5cf6;
+    --color-chart-1: #8b5cf6;
+    --color-chart-2: #ea580c;
+    --color-chart-3: #15803d;
+    --color-chart-4: #f97316;
+    --color-chart-5: #f1f5f9;
+  }
 }
 
 @layer base {
@@ -66,10 +77,9 @@
   }
 }
 
-/* Added custom animations for splash screen */
+/* Custom animations for splash screen */
 @keyframes pulse-glow {
-  0%,
-  100% {
+  0%, 100% {
     opacity: 1;
     transform: scale(1);
   }
@@ -80,12 +90,17 @@
 }
 
 @keyframes float {
-  0%,
-  100% {
+  0%, 100% {
     transform: translateY(0px);
   }
   50% {
     transform: translateY(-10px);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
   }
 }
 
@@ -95,12 +110,6 @@
 
 .animate-float {
   animation: float 3s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-  100% {
-    transform: translateX(100%);
-  }
 }
 
 /* Custom Scrollbar Styles */
@@ -127,7 +136,6 @@
   background: rgba(148, 163, 184, 0.5);
 }
 
-/* Dark mode scrollbar */
 .dark .custom-scrollbar {
   scrollbar-color: rgba(71, 85, 105, 0.4) transparent;
 }
@@ -166,7 +174,6 @@
   background: rgba(148, 163, 184, 0.6);
 }
 
-/* Dark mode main content scrollbar */
 .dark .content-scrollbar {
   scrollbar-color: rgba(71, 85, 105, 0.5) rgba(15, 23, 42, 0.5);
 }
