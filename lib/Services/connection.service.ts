@@ -1,4 +1,4 @@
-import { validateApiUrl, rateLimiter, sanitizeForLog } from '@/lib/validation'
+import { validateApiUrl, rateLimiter, sanitizeForLog } from '../validation'
 import type { ApiConfig } from '../api-config'
 import { API_ENDPOINTS } from '../api-config'
 

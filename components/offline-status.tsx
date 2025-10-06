@@ -1,12 +1,12 @@
 'use client'
 
 import React from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Separator } from '@/components/ui/separator'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
+import { Button } from './ui/button'
+import { Badge } from './ui/badge'
+import { Progress } from './ui/progress'
+import { Separator } from './ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
 import { 
   Wifi, 
   WifiOff, 
@@ -21,8 +21,8 @@ import {
   Cloud,
   CloudOff
 } from 'lucide-react'
-import { useOfflineManager } from '@/hooks/use-offline-manager'
-import { useToast } from '@/hooks/use-toast'
+import { useOfflineManager } from '../hooks/use-offline-manager'
+import { useToast } from '../hooks/use-toast'
 
 interface OfflineStatusProps {
   className?: string

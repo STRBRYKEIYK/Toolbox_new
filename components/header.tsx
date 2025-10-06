@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from "react"
 import { Search, Home, ShoppingCart, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { CartStatusIndicator } from "@/components/cart-recovery-panel"
-import type { ViewType } from "@/app/page"
+import { Button } from "./ui/button"
+import { Input } from "./ui/input"
+import { Badge } from "./ui/badge"
+import { ThemeToggle } from "./theme-toggle"
+import { CartStatusIndicator } from "./cart-recovery-panel"
+import type { ViewType } from "../app/page"
 
 interface HeaderProps {
   cartItemCount: number

@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { Product } from '@/lib/barcode-scanner';
+import type { Product } from './barcode-scanner';
 
 export interface ExportOptions {
   filename?: string;

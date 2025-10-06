@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { CheckCircle, ArrowRight } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
+import { Button } from "./ui/button"
+import { Card, CardContent } from "./ui/card"
+import { Progress } from "./ui/progress"
 
 interface CheckoutSuccessCountdownProps {
   isOpen: boolean

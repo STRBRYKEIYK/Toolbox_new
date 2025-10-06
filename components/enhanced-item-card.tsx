@@ -1,9 +1,9 @@
 import React from 'react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from './ui/card'
+import { Button } from './ui/button'
+import { Badge } from './ui/badge'
 import { ShoppingCart, Eye, Package, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
-import type { Product } from '@/lib/barcode-scanner'
+import type { Product } from '../lib/barcode-scanner'
 
 interface EnhancedItemCardProps {
   product: Product

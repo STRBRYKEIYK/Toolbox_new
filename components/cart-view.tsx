@@ -2,18 +2,18 @@
 
 import { useState } from "react"
 import { Minus, Plus, Trash2, History } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "../components/ui/button"
+import { Card, CardContent } from "../components/ui/card"
+import { Badge } from "../components/ui/badge"
+import { Checkbox } from "../components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
 import { CheckoutModal } from "./checkout-modal"
 import { CheckoutSuccessCountdown } from "./checkout-success-countdown"
 import { CartRecoveryPanel, CartStatusIndicator } from "./cart-recovery-panel"
-import { apiService } from "@/lib/api_service"
-import { useToast } from "@/hooks/use-toast"
-import type { CartItem } from "@/app/page"
-import type { Employee } from "@/lib/Services/employees.service"
+import { apiService } from "../lib/api_service"
+import { useToast } from "../hooks/use-toast"
+import type { CartItem } from "../app/page"
+import type { Employee } from "../lib/Services/employees.service"
 
 interface CartViewProps {
   items: CartItem[]
