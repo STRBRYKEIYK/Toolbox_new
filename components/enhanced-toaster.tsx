@@ -1,8 +1,8 @@
 "use client"
 
 import React from 'react'
-import { useToast } from '@/hooks/use-toast'
-import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/toast'
+import { useToast } from '../hooks/use-toast'
+import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from './ui/toast'
 import { CheckCircle, AlertCircle, XCircle, Info, Loader2 } from 'lucide-react'
 
 // Define our custom toast type

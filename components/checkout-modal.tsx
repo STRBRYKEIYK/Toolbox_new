@@ -2,16 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { X, User, Wifi, WifiOff, Scan, CreditCard, UserCheck } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { apiService } from "@/lib/api_service"
-import type { CartItem } from "@/app/page"
-import type { Employee } from "@/lib/Services/employees.service"
+import { Button } from "../components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { Input } from "../components/ui/input"
+import { Label } from "../components/ui/label"
+import { Separator } from "../components/ui/separator"
+import { Badge } from "../components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
+import { apiService } from "../lib/api_service"
+import type { CartItem } from "../app/page"
+import type { Employee } from "../lib/Services/employees.service"
 
 interface CheckoutModalProps {
   isOpen: boolean

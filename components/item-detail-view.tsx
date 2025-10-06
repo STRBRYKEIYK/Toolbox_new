@@ -2,10 +2,10 @@
 
 import { useState } from "react"
 import { ArrowLeft, Plus, Minus } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import type { Product } from "@/lib/barcode-scanner"
+import { Button } from "./ui/button"
+import { Card, CardContent } from "./ui/card"
+import { Badge } from "./ui/badge"
+import type { Product } from "../lib/barcode-scanner"
 
 interface ItemDetailViewProps {
   product: Product

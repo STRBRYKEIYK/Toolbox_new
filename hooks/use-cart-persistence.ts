@@ -15,9 +15,9 @@ import {
   restoreCartFromHistory,
   exportCartData,
   importCartData
-} from '@/lib/cart-persistence'
-import type { Product } from '@/lib/barcode-scanner'
-import { useToast } from '@/hooks/use-toast'
+} from '../lib/cart-persistence'
+import type { Product } from '../lib/barcode-scanner'
+import { useToast } from './use-toast'
 
 export interface UseCartPersistenceReturn {
   // State
