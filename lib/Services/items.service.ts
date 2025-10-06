@@ -1,4 +1,4 @@
-import { ApiItemSchema, rateLimiter, sanitizeForLog } from '@/lib/validation'
+import { ApiItemSchema, rateLimiter, sanitizeForLog } from '../validation'
 import type { ApiConfig } from '../api-config'
 import { API_ENDPOINTS } from '../api-config'
 

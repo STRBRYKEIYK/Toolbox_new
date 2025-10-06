@@ -1,13 +1,13 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { useCartPersistence } from '@/hooks/use-cart-persistence'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Badge } from '../components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { useCartPersistence } from '../hooks/use-cart-persistence'
 import { Clock, Download, Upload, History, ShoppingCart, RefreshCw, Trash2 } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
+import { useToast } from '../hooks/use-toast'
 
 interface CartRecoveryPanelProps {
   trigger?: React.ReactNode

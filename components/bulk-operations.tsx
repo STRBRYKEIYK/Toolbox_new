@@ -1,16 +1,16 @@
 import React, { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Badge } from '@/components/ui/badge'
 import { 
   ShoppingCart, 
   Download, 
   Trash2, 
   X
 } from 'lucide-react'
-import { useLoading } from '@/components/loading-context'
-import { InlineLoader } from '@/components/enhanced-loaders'
-import type { Product } from '@/lib/barcode-scanner'
+import { Button } from '../components/ui/button'
+import { Checkbox } from '../components/ui/checkbox'
+import { Badge } from '../components/ui/badge'
+import { useLoading } from '../components/loading-context'
+import { InlineLoader } from '../components/enhanced-loaders'
+import type { Product } from '../lib/barcode-scanner'
 
 interface BulkOperationsBarProps {
   selectedItems: string[]

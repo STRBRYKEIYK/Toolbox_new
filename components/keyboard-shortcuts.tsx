@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect } from 'react'
-import { useToast } from '@/hooks/use-toast'
+import { useToast } from '../hooks/use-toast'
 
 interface KeyboardShortcut {
   key: string

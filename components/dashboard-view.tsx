@@ -1,29 +1,29 @@
 import type React from "react"
 import { useState, useMemo, useEffect, useCallback } from "react"
-import { validateSearchQuery } from "@/lib/validation"
+import { validateSearchQuery } from "../lib/validation"
 import { 
   processBarcodeInput,
   type Product
-} from "@/lib/barcode-scanner"
+} from "../lib/barcode-scanner"
 import { Filter, Grid, List, Scan, ChevronDown, RefreshCw, Settings, Wifi, Download, FileText, FileSpreadsheet, Code, Plus, Package } from "lucide-react"
-import { useLoading } from "@/components/loading-context"
-import { SearchLoader } from "@/components/enhanced-loaders"
-import { OfflineStatusPanel } from "@/components/offline-status"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { useToast } from "@/hooks/use-toast"
-import { apiService } from "@/lib/api_service"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { exportToCSV, exportToXLSX, exportToJSON, prepareExportData, exportLogsToXLSX } from "@/lib/export-utils"
-import { EnhancedItemCard } from "@/components/enhanced-item-card"
-import { BulkOperationsBar, useBulkSelection } from "@/components/bulk-operations"
+import { useLoading } from "./loading-context"
+import { SearchLoader } from "./enhanced-loaders"
+import { OfflineStatusPanel } from "./offline-status"
+import { Button } from "./ui/button"
+import { Input } from "./ui/input"
+import { Checkbox } from "./ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Card, CardContent } from "./ui/card"
+import { Badge } from "./ui/badge"
+import { Progress } from "./ui/progress"
+import { useToast } from "../hooks/use-toast"
+import { apiService } from "../lib/api_service"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog"
+import { Label } from "./ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
+import { exportToCSV, exportToXLSX, exportToJSON, prepareExportData, exportLogsToXLSX } from "../lib/export-utils"
+import { EnhancedItemCard } from "./enhanced-item-card"
+import { BulkOperationsBar, useBulkSelection } from "./bulk-operations"
 
 
 interface DashboardViewProps {
@@ -1324,7 +1324,7 @@ export function DashboardView({
             onBulkExport={async (selectedProducts, format) => {
               try {
                 // Use existing export functionality
-                const { exportToCSV, exportToXLSX, exportToJSON, prepareExportData } = await import('@/lib/export-utils')
+                const { exportToCSV, exportToXLSX, exportToJSON, prepareExportData } = await import('../lib/export-utils')
                 const exportData = prepareExportData(selectedProducts)
                 
                 let filename = `selected_products_${new Date().toISOString().split('T')[0]}`
